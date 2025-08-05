@@ -547,7 +547,9 @@ const Timeline = ({ tasks, onTaskClick, zoomLevel, setViewStartDate, viewStartDa
     const [startX, setStartX] = useState(0);
     const [scrollLeft, setScrollLeft] = useState(0);
 
-    const dayWidth = useMemo(() => 12 + Math.pow(zoomLevel, 1.7), [zoomLevel]);
+    {/* FÓRMULA DO ZOOM AJUSTADA PARA UMA ESCALA LINEAR */}
+    const dayWidth = useMemo(() => 20 + (zoomLevel * 4), [zoomLevel]);
+
     const numDaysInView = useMemo(() => {
         if (!timelineRef.current) return 30;
         return Math.floor(timelineRef.current.clientWidth / dayWidth);
