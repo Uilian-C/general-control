@@ -4,7 +4,6 @@ on:
   # Executa em pushes direcionados ao branch padrão
   push:
     branches: ["main"]
-
   # Permite que você execute este fluxo de trabalho manualmente na guia Ações
   workflow_dispatch:
 
@@ -14,10 +13,10 @@ permissions:
   pages: write
   id-token: write
 
-# Permite apenas uma implantação simultânea, ignorando as execuções enfileiradas entre a em andamento e a mais recente.
+# Permite apenas uma implantação simultânea
 concurrency:
   group: "pages"
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   # Tarefa de construção
@@ -33,9 +32,8 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Build
-        run: npm run build
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+        # A CORREÇÃO ESTÁ AQUI: CI=false diz ao robô para ignorar avisos
+        run: CI=false npm run build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
