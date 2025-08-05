@@ -802,15 +802,16 @@ const WorkspaceView = ({ tasks, onTaskClick, filters, setFilters, zoomLevel, set
     return (
         <div className="space-y-6">
             <Card>
-                <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                     <div className="flex items-center gap-2">
-                        <button onClick={() => setViewStartDate(new Date())} variant="secondary">Hoje</button>
-                    </div>
-                    <div className="flex items-center gap-4">
+                {/* CORREÇÃO DO LAYOUT: Ajuste nas classes do Flexbox para responsividade */}
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex-shrink-0">
+                        <Button onClick={() => setViewStartDate(new Date())} variant="secondary">Hoje</Button>
+                    </div>
+                    <div className="flex-grow flex flex-wrap justify-center items-center gap-4">
                         <FilterGroup title="Prioridade" options={PRIORITIES} active={filters.priority} onFilterChange={val => setFilters({...filters, priority: val})}/>
                         <FilterGroup title="Status" options={STATUSES} active={filters.status} onFilterChange={val => setFilters({...filters, status: val})}/>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-shrink-0">
                         <button onClick={() => setZoomLevel(z => Math.max(1, z - 1))} className="p-2 rounded-full hover:bg-gray-200 transition-colors"><ZoomOut size={20} /></button>
                         <input type="range" min="1" max="10" value={zoomLevel} onChange={e => setZoomLevel(Number(e.target.value))} className="w-24" />
                         <button onClick={() => setZoomLevel(z => Math.min(10, z + 1))} className="p-2 rounded-full hover:bg-gray-200 transition-colors"><ZoomIn size={20} /></button>
