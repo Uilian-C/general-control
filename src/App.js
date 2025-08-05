@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query } from 'firebase/firestore';
-import { Target, Flag, Plus, Trash2, X, Layers, Briefcase, Edit, Settings } from 'lucide-react';
+import { Target, Flag, Plus, Trash2, X, Layers, Briefcase, Edit, Settings, ChevronLeft, ChevronRight, Tag, Palette } from 'lucide-react';
 
 // --- Configuração do Firebase ---
 const firebaseConfig = {
@@ -25,6 +25,8 @@ const PRIORITIES = {
   'Baixa': { label: 'Baixa', color: 'bg-blue-400' },
 };
 
+const TASK_COLORS = ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#c084fc', '#f472b6', '#a3a3a3'];
+
 const STATUSES = {
   'A Fazer': { label: 'A Fazer', color: 'bg-gray-200 text-gray-800' },
   'Em Progresso': { label: 'Em Progresso', color: 'bg-indigo-200 text-indigo-800' },
@@ -38,6 +40,7 @@ const formatDate = (dateStr) => {
 };
 
 const getDaysInView = (startDate, endDate) => {
+    if (!startDate || !endDate) return [];
     const days = [];
     let current = new Date(startDate);
     current.setUTCHours(0,0,0,0);
@@ -223,16 +226,9 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
         } else {
             const today = new Date().toISOString().split('T')[0];
             setCurrentTask({
-                title: '',
-                description: '',
-                priority: 'Média',
-                status: 'A Fazer',
-                startDate: today,
-                endDate: today,
-                isMilestone: false,
-                okrId: '',
-                dependencies: [],
-                subtasks: []
+                title: '', description: '', priority: 'Média', status: 'A Fazer',
+                startDate: today, endDate: today, isMilestone: false, okrId: '',
+                dependencies: [], subtasks: [], projectTag: '', customColor: ''
             });
         }
     }, [task, isOpen]);
@@ -242,8 +238,15 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
         setCurrentTask(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
     };
 
+    const handleSubtaskChange = (index, field, value) => {
+        const newSubtasks = [...currentTask.subtasks];
+        newSubtasks[index][field] = value;
+        setCurrentTask(prev => ({ ...prev, subtasks: newSubtasks }));
+    };
+
     const addSubtask = () => {
-        setCurrentTask(prev => ({ ...prev, subtasks: [...(prev.subtasks || []), { id: `sub_${Date.now()}`, text: '', completed: false }] }));
+        const newSubtask = { id: `sub_${Date.now()}`, text: '', completed: false, dueDate: '' };
+        setCurrentTask(prev => ({ ...prev, subtasks: [...(prev.subtasks || []), newSubtask] }));
     };
 
     const removeSubtask = (index) => {
@@ -265,12 +268,25 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
     const availableDependencies = tasks.filter(t => t.id !== (task ? task.id : null));
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={task ? "Editar Tarefa" : "Nova Tarefa"}>
+        <Modal isOpen={isOpen} onClose={onClose} title={task?.humanId ? `Editar Tarefa [${task.humanId}]` : "Nova Tarefa"}>
             <div className="space-y-4 text-gray-700">
                 <input type="text" name="title" value={currentTask.title || ''} onChange={handleChange} placeholder="Título da Tarefa" className="w-full p-2 bg-gray-100 border border-gray-300 rounded-md text-gray-800" />
                 <textarea name="description" value={currentTask.description || ''} onChange={handleChange} placeholder="Descrição" className="w-full p-2 bg-gray-100 border border-gray-300 rounded-md text-gray-800 h-24"></textarea>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-500">Tag do Projeto</label>
+                        <input type="text" name="projectTag" value={currentTask.projectTag || ''} onChange={handleChange} placeholder="Ex: App V2" className="w-full p-2 bg-gray-100 border border-gray-300 rounded-md text-gray-800" />
+                    </div>
+                     <div>
+                        <label className="block text-sm font-medium text-gray-500">Cor da Tarefa</label>
+                        <div className="flex items-center gap-2 p-2 bg-gray-100 border border-gray-300 rounded-md">
+                            {TASK_COLORS.map(color => (
+                                <button key={color} onClick={() => handleChange({ target: { name: 'customColor', value: color }})} className={`w-6 h-6 rounded-full transition-transform hover:scale-110 ${currentTask.customColor === color ? 'ring-2 ring-offset-2 ring-indigo-500' : ''}`} style={{ backgroundColor: color }} />
+                            ))}
+                            <button onClick={() => handleChange({ target: { name: 'customColor', value: '' }})} className="text-xs text-gray-500 hover:text-gray-800 ml-2">Limpar</button>
+                        </div>
+                    </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-500">Prioridade</label>
                         <select name="priority" value={currentTask.priority || 'Média'} onChange={handleChange} className="w-full p-2 bg-gray-100 border border-gray-300 rounded-md text-gray-800">
@@ -294,6 +310,21 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
                 </div>
 
                 <div>
+                    <h4 className="text-md font-semibold text-gray-600 mb-2">Subtarefas</h4>
+                    <div className="space-y-2">
+                        {currentTask.subtasks && currentTask.subtasks.map((sub, index) => (
+                            <div key={sub.id} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-2 p-2 bg-gray-50 rounded-md">
+                                <input type="checkbox" checked={sub.completed} onChange={(e) => handleSubtaskChange(index, 'completed', e.target.checked)} className="form-checkbox h-5 w-5 bg-gray-200 border-gray-300 rounded text-indigo-600 focus:ring-indigo-500"/>
+                                <input type="text" value={sub.text} onChange={(e) => handleSubtaskChange(index, 'text', e.target.value)} className={`p-1 bg-white border border-gray-300 rounded-md text-gray-800 ${sub.completed ? 'line-through text-gray-500' : ''}`} placeholder="Descrição da subtarefa" />
+                                <input type="date" value={sub.dueDate || ''} onChange={(e) => handleSubtaskChange(index, 'dueDate', e.target.value)} className="p-1 bg-white border border-gray-300 rounded-md text-gray-800 text-sm" />
+                                <button onClick={() => removeSubtask(index)} className="text-red-500 hover:text-red-400"><Trash2 size={16} /></button>
+                            </div>
+                        ))}
+                    </div>
+                    <Button onClick={addSubtask} variant="secondary" className="mt-2 text-sm"><Plus size={16}/> Adicionar Subtarefa</Button>
+                </div>
+
+                <div>
                     <label className="block text-sm font-medium text-gray-500">Vincular ao OKR</label>
                     <select name="okrId" value={currentTask.okrId || ''} onChange={handleChange} className="w-full p-2 bg-gray-100 border border-gray-300 rounded-md text-gray-800">
                         <option value="">Nenhum</option>
@@ -310,7 +341,7 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
                         onChange={(e) => setCurrentTask(prev => ({ ...prev, dependencies: Array.from(e.target.selectedOptions, option => option.value) }))}
                         className="w-full p-2 bg-gray-100 border border-gray-300 rounded-md text-gray-800 h-32"
                     >
-                        {availableDependencies.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+                        {availableDependencies.map(t => <option key={t.id} value={t.id}>[{t.humanId}] {t.title}</option>)}
                     </select>
                     <p className="text-xs text-gray-500 mt-1">Segure Ctrl/Cmd para selecionar múltiplos.</p>
                 </div>
@@ -334,40 +365,48 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
     );
 };
 
-const Timeline = ({ tasks, onTaskClick, timeScale, dependencyLines }) => {
+const Timeline = ({ tasks, onTaskClick, timeScale, dateOffset, setDateOffset, dependencyLines }) => {
     const today = new Date();
     today.setUTCHours(0,0,0,0);
 
-    const { startDate, endDate } = useMemo(() => {
+    const handleNavigate = (direction) => {
+        setDateOffset(prev => prev + direction);
+    };
+
+    const dateInfo = useMemo(() => {
         const now = new Date();
-        let start = new Date(now);
-        let end = new Date(now);
+        let start, end;
 
         switch (timeScale) {
             case 'Semanal':
-                start.setDate(now.getDate() - now.getDay());
+                start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (dateOffset * 7));
+                start.setDate(start.getDate() - start.getDay());
+                end = new Date(start);
                 end.setDate(start.getDate() + 6);
                 break;
             case 'Mensal':
-                start = new Date(now.getFullYear(), now.getMonth(), 1);
-                end = new Date(now.getFullYear(), now.getMonth() + 3, 0);
+                start = new Date(now.getFullYear(), now.getMonth() + dateOffset, 1);
+                end = new Date(now.getFullYear(), now.getMonth() + dateOffset + 3, 0);
                 break;
             case 'Trimestral':
-                const quarter = Math.floor(now.getMonth() / 3);
-                start = new Date(now.getFullYear(), quarter * 3, 1);
-                end = new Date(now.getFullYear(), quarter * 3 + 3, 0);
+                const currentQuarter = Math.floor(now.getMonth() / 3);
+                const targetQuarter = currentQuarter + dateOffset;
+                start = new Date(now.getFullYear(), targetQuarter * 3, 1);
+                end = new Date(now.getFullYear(), targetQuarter * 3 + 3, 0);
                 break;
             case 'Anual':
-                start = new Date(now.getFullYear(), 0, 1);
-                end = new Date(now.getFullYear(), 11, 31);
+                start = new Date(now.getFullYear() + dateOffset, 0, 1);
+                end = new Date(now.getFullYear() + dateOffset, 11, 31);
                 break;
             default:
-                start.setDate(now.getDate() - now.getDay());
-                end.setDate(start.getDate() + 6);
+                start = new Date();
+                end = new Date();
                 break;
         }
         return { startDate: start, endDate: end };
-    }, [timeScale]);
+    }, [timeScale, dateOffset]);
+
+    const { startDate, endDate } = dateInfo;
 
     const days = useMemo(() => getDaysInView(startDate, endDate), [startDate, endDate]);
     const dayWidth = 45;
@@ -387,89 +426,98 @@ const Timeline = ({ tasks, onTaskClick, timeScale, dependencyLines }) => {
     }, [days]);
 
     return (
-        <div className="relative overflow-x-auto bg-white border border-gray-200 rounded-lg pb-4 shadow-sm">
-             <div style={{ width: timelineWidth }}>
-                <div className="flex sticky top-0 z-20 bg-gray-100 bg-opacity-80 backdrop-blur-sm">
-                    {months.map((month, index) => (
-                        <div key={index} className="text-center font-semibold text-gray-700 border-b-2 border-r border-gray-200 py-2" style={{ width: month.days * dayWidth }}>
-                            {month.label}
-                        </div>
-                    ))}
+        <div className="relative bg-white border border-gray-200 rounded-lg shadow-sm">
+             <div className="sticky top-0 z-30 bg-white/70 backdrop-blur-sm p-2 border-b border-gray-200 flex justify-end">
+                <div className="flex items-center gap-2">
+                    <button onClick={() => handleNavigate(-1)} className="p-1 rounded-full hover:bg-gray-200 transition-colors"><ChevronLeft size={20} /></button>
+                    <button onClick={() => handleNavigate(1)} className="p-1 rounded-full hover:bg-gray-200 transition-colors"><ChevronRight size={20} /></button>
                 </div>
-                <div className="flex sticky top-11 z-20 bg-gray-100 bg-opacity-80 backdrop-blur-sm">
-                    {days.map((day, index) => (
-                        <div key={index} className="flex-shrink-0 text-center border-b border-r border-gray-200" style={{ width: dayWidth }}>
-                            <div className={`text-xs ${day.toDateString() === today.toDateString() ? 'text-indigo-600' : 'text-gray-500'}`}>
-                                {new Intl.DateTimeFormat('pt-BR', { weekday: 'short' }).format(day).slice(0,3)}
+            </div>
+            <div className="overflow-x-auto">
+                <div style={{ width: timelineWidth }}>
+                    <div className="flex sticky top-0 z-20 bg-gray-100 bg-opacity-80 backdrop-blur-sm h-12">
+                        {months.map((month, index) => (
+                            <div key={index} className="flex items-center justify-center text-center font-semibold text-gray-700 border-b-2 border-r border-gray-200 py-2 whitespace-nowrap px-2" style={{ width: month.days * dayWidth }}>
+                                {month.label}
                             </div>
-                            <div className={`text-lg font-semibold ${day.toDateString() === today.toDateString() ? 'text-indigo-600' : 'text-gray-800'}`}>
-                                {day.getDate()}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-                <div className="absolute top-0 left-0 w-full h-full z-0">
-                    <div className="flex h-full" style={{ width: timelineWidth }}>
-                        {days.map((day, index) => (
-                            <div key={index} className={`flex-shrink-0 h-full border-r border-gray-100 ${day.toDateString() === today.toDateString() ? 'bg-indigo-100' : ''}`} style={{ width: dayWidth }}></div>
                         ))}
                     </div>
-                </div>
-                <div className="relative pt-4 space-y-2 z-10" style={{ height: tasks.length * 48 }}>
-                    {tasks.map((task, index) => {
-                        const taskStart = new Date(task.startDate);
-                        taskStart.setUTCHours(0,0,0,0);
-                        const taskEnd = new Date(task.endDate);
-                        taskEnd.setUTCHours(0,0,0,0);
-
-                        const startOffset = Math.max(0, (taskStart - startDate) / (1000 * 60 * 60 * 24));
-                        const duration = Math.max(1, (taskEnd - taskStart) / (1000 * 60 * 60 * 24) + 1);
-                        
-                        const left = startOffset * dayWidth;
-                        const width = duration * dayWidth - 4;
-
-                        if (taskEnd < startDate || taskStart > endDate) return null;
-
-                        const priorityClasses = PRIORITIES[task.priority] || PRIORITIES['Média'];
-                        
-                        const subtaskProgress = task.subtasks && task.subtasks.length > 0
-                            ? (task.subtasks.filter(s => s.completed).length / task.subtasks.length) * 100
-                            : (task.status === 'Concluído' ? 100 : 0);
-
-                        return (
-                            <div
-                                key={task.id}
-                                id={`task-${task.id}`}
-                                className="h-10 absolute flex items-center rounded-lg cursor-pointer hover:scale-105 hover:z-20 transition-transform duration-200"
-                                style={{ top: `${index * 48}px`, left: `${left}px`, width: `${width}px` }}
-                                onClick={() => onTaskClick(task)}
-                            >
-                                <div className={`h-full w-full ${priorityClasses.color} rounded-lg flex items-center px-3 overflow-hidden relative shadow-md border-2 border-transparent hover:border-indigo-500`}>
-                                    <div className="absolute top-0 left-0 h-full bg-black bg-opacity-10 rounded-lg" style={{ width: `${subtaskProgress}%` }}></div>
-                                    {task.isMilestone && <Flag className="text-white mr-2 flex-shrink-0 z-10" size={16} />}
-                                    <p className="text-sm font-semibold text-white truncate z-10">{task.title}</p>
+                    <div className="flex sticky top-12 z-20 bg-gray-100 bg-opacity-80 backdrop-blur-sm">
+                        {days.map((day, index) => (
+                            <div key={index} className="flex-shrink-0 text-center border-b border-r border-gray-200 py-1" style={{ width: dayWidth }}>
+                                <div className={`text-xs ${day.toDateString() === today.toDateString() ? 'text-indigo-600' : 'text-gray-500'}`}>
+                                    {new Intl.DateTimeFormat('pt-BR', { weekday: 'short' }).format(day).slice(0,3)}
+                                </div>
+                                <div className={`text-lg font-semibold ${day.toDateString() === today.toDateString() ? 'text-indigo-600' : 'text-gray-800'}`}>
+                                    {day.getDate()}
                                 </div>
                             </div>
-                        );
-                    })}
+                        ))}
+                    </div>
+                    <div className="relative pt-4 space-y-2 z-10" style={{ height: tasks.length * 52 + 20 }}>
+                        {tasks.map((task, index) => {
+                            const taskStart = new Date(task.startDate);
+                            taskStart.setUTCHours(0,0,0,0);
+                            const taskEnd = new Date(task.endDate);
+                            taskEnd.setUTCHours(0,0,0,0);
+
+                            const startOffset = Math.max(0, (taskStart - startDate) / (1000 * 60 * 60 * 24));
+                            const duration = Math.max(1, (taskEnd - taskStart) / (1000 * 60 * 60 * 24) + 1);
+                            
+                            const left = startOffset * dayWidth;
+                            const width = duration * dayWidth - 8;
+
+                            if (taskEnd < startDate || taskStart > endDate) return null;
+
+                            const priorityColor = (PRIORITIES[task.priority] || PRIORITIES['Média']).color;
+                            const taskColorStyle = task.customColor ? {} : { backgroundColor: priorityColor.replace('bg-', '#') };
+                            
+                            const subtaskProgress = task.subtasks && task.subtasks.length > 0
+                                ? (task.subtasks.filter(s => s.completed).length / task.subtasks.length) * 100
+                                : (task.status === 'Concluído' ? 100 : 0);
+
+                            return (
+                                <div
+                                    key={task.id}
+                                    id={`task-${task.id}`}
+                                    className="h-11 absolute flex items-center rounded-lg cursor-pointer transition-all duration-200 group"
+                                    style={{ top: `${index * 52}px`, left: `${left}px`, width: `${width}px` }}
+                                    onClick={() => onTaskClick(task)}
+                                    title={task.title}
+                                >
+                                    <div className={`h-full w-full rounded-lg flex items-center px-3 overflow-hidden relative shadow-md group-hover:shadow-lg group-hover:scale-105 transition-all duration-200 ${!task.customColor && priorityColor}`} style={{ backgroundColor: task.customColor }}>
+                                        <div className="absolute top-0 left-0 h-full bg-black/20 rounded-lg" style={{ width: `${subtaskProgress}%` }}></div>
+                                        {task.isMilestone && <Flag className="text-white mr-2 flex-shrink-0 z-10" size={16} />}
+                                        <div className="flex items-center truncate z-10">
+                                            {task.projectTag && <span className="text-xs bg-black/20 text-white px-2 py-0.5 rounded-full mr-2">{task.projectTag}</span>}
+                                            <p className="text-sm font-semibold text-white truncate">
+                                                <span className="font-mono text-xs bg-black/20 px-1 py-0.5 rounded-sm mr-2">{task.humanId}</span>
+                                                {task.title}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <svg className="absolute top-0 left-0 w-full h-full z-10 pointer-events-none" style={{ height: tasks.length * 52 + 50 }}>
+                       {dependencyLines.map((line, i) => (
+                           <path
+                               key={i}
+                               d={line.d}
+                               stroke="#818cf8"
+                               strokeWidth="2"
+                               fill="none"
+                               markerEnd="url(#arrowhead)"
+                           />
+                       ))}
+                       <defs>
+                           <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
+                               <polygon points="0 0, 10 3.5, 0 7" fill="#818cf8" />
+                           </marker>
+                       </defs>
+                    </svg>
                 </div>
-                <svg className="absolute top-0 left-0 w-full h-full z-10 pointer-events-none" style={{ height: tasks.length * 48 + 50 }}>
-                   {dependencyLines.map((line, i) => (
-                       <path
-                           key={i}
-                           d={line.d}
-                           stroke="#6366f1"
-                           strokeWidth="2"
-                           fill="none"
-                           markerEnd="url(#arrowhead)"
-                       />
-                   ))}
-                   <defs>
-                       <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
-                           <polygon points="0 0, 10 3.5, 0 7" fill="#6366f1" />
-                       </marker>
-                   </defs>
-                </svg>
             </div>
         </div>
     );
@@ -498,7 +546,7 @@ const FilterGroup = ({ title, options, active, onFilterChange }) => (
     </div>
 );
 
-const WorkspaceView = ({ tasks, onTaskClick, filters, setFilters, timeScale, setTimeScale, dependencyLines }) => {
+const WorkspaceView = ({ tasks, onTaskClick, filters, setFilters, timeScale, setTimeScale, dependencyLines, dateOffset, setDateOffset }) => {
     return (
         <div className="space-y-6">
             <Card>
@@ -507,7 +555,7 @@ const WorkspaceView = ({ tasks, onTaskClick, filters, setFilters, timeScale, set
                         <FilterGroup title="Prioridade" options={PRIORITIES} active={filters.priority} onFilterChange={val => setFilters({...filters, priority: val})}/>
                         <FilterGroup title="Status" options={STATUSES} active={filters.status} onFilterChange={val => setFilters({...filters, status: val})}/>
                     </div>
-                    <select value={timeScale} onChange={e => setTimeScale(e.target.value)} className="bg-gray-100 border-gray-300 text-gray-800 rounded-md p-2">
+                    <select value={timeScale} onChange={e => { setTimeScale(e.target.value); setDateOffset(0); }} className="bg-gray-100 border-gray-300 text-gray-800 rounded-md p-2">
                         <option>Semanal</option>
                         <option>Mensal</option>
                         <option>Trimestral</option>
@@ -515,7 +563,7 @@ const WorkspaceView = ({ tasks, onTaskClick, filters, setFilters, timeScale, set
                     </select>
                 </div>
             </Card>
-            <Timeline tasks={tasks} onTaskClick={onTaskClick} timeScale={timeScale} dependencyLines={dependencyLines} />
+            <Timeline tasks={tasks} onTaskClick={onTaskClick} timeScale={timeScale} dependencyLines={dependencyLines} dateOffset={dateOffset} setDateOffset={setDateOffset} />
         </div>
     );
 };
@@ -568,7 +616,7 @@ const ExecutiveView = ({ tasks, okrs }) => {
                     {milestones.length > 0 ? milestones.map(milestone => (
                         <div key={milestone.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
                             <div>
-                                <p className="font-semibold text-gray-700">{milestone.title}</p>
+                                <p className="font-semibold text-gray-700">[{milestone.humanId}] {milestone.title}</p>
                                 <p className="text-sm text-gray-500">{milestone.description}</p>
                             </div>
                             <div className="text-right flex-shrink-0 ml-4">
@@ -594,6 +642,7 @@ export default function App() {
     const [selectedTask, setSelectedTask] = useState(null);
     const [filters, setFilters] = useState({ priority: 'Todos', status: 'Todos' });
     const [timeScale, setTimeScale] = useState('Mensal');
+    const [dateOffset, setDateOffset] = useState(0);
     const [userId, setUserId] = useState(null);
     const [appId, setAppId] = useState('default-app-id');
     const [dependencyLines, setDependencyLines] = useState([]);
@@ -642,7 +691,11 @@ export default function App() {
             const { id, ...dataToUpdate } = taskData;
             await updateDoc(doc(db, collectionPath, id), dataToUpdate);
         } else {
-            await addDoc(collection(db, collectionPath), taskData);
+            const newTask = {
+                ...taskData,
+                humanId: `T-${Date.now().toString().slice(-6)}`
+            };
+            await addDoc(collection(db, collectionPath), newTask);
         }
     };
     
@@ -679,11 +732,12 @@ export default function App() {
     };
 
     const filteredTasks = useMemo(() => {
-        return tasks.filter(task => {
-            const priorityMatch = filters.priority === 'Todos' || task.priority === filters.priority;
-            const statusMatch = filters.status === 'Todos' || task.status === filters.status;
-            return priorityMatch && statusMatch;
-        });
+        return tasks.sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
+                    .filter(task => {
+                        const priorityMatch = filters.priority === 'Todos' || task.priority === filters.priority;
+                        const statusMatch = filters.status === 'Todos' || task.status === filters.status;
+                        return priorityMatch && statusMatch;
+                    });
     }, [tasks, filters]);
     
     const calculateDependencyLines = useCallback(() => {
@@ -692,9 +746,15 @@ export default function App() {
             return;
         }
         const lines = [];
-        const containerElem = document.querySelector('.relative.overflow-x-auto');
+        const containerElem = document.querySelector('.overflow-x-auto');
         if (!containerElem) return;
         const containerRect = containerElem.getBoundingClientRect();
+        
+        const taskPositions = {};
+        filteredTasks.forEach((t, i) => {
+            taskPositions[t.id] = i;
+        });
+
         filteredTasks.forEach((task) => {
             if (task.dependencies && task.dependencies.length > 0) {
                 task.dependencies.forEach(depId => {
@@ -707,6 +767,7 @@ export default function App() {
                         const startY = startRect.top - containerRect.top + startRect.height / 2;
                         const endX = endRect.left - containerRect.left + containerElem.scrollLeft;
                         const endY = endRect.top - containerRect.top + endRect.height / 2;
+                        
                         const controlX1 = startX + 60;
                         const controlY1 = startY;
                         const controlX2 = endX - 60;
@@ -721,13 +782,15 @@ export default function App() {
 
     useEffect(() => {
         const timer = setTimeout(calculateDependencyLines, 500);
-        const containerElem = document.querySelector('.relative.overflow-x-auto');
+        const containerElem = document.querySelector('.overflow-x-auto');
         containerElem?.addEventListener('scroll', calculateDependencyLines);
+        window.addEventListener('resize', calculateDependencyLines);
         return () => {
             clearTimeout(timer);
             containerElem?.removeEventListener('scroll', calculateDependencyLines);
+            window.removeEventListener('resize', calculateDependencyLines);
         };
-    }, [filteredTasks, timeScale, calculateDependencyLines]);
+    }, [filteredTasks, timeScale, dateOffset, calculateDependencyLines]);
 
     if (isLoading && !tasks.length) {
         return <div className="bg-gray-50 text-gray-800 min-h-screen flex items-center justify-center">Carregando Roadmap...</div>;
@@ -760,6 +823,8 @@ export default function App() {
                                 timeScale={timeScale}
                                 setTimeScale={setTimeScale}
                                 dependencyLines={dependencyLines}
+                                dateOffset={dateOffset}
+                                setDateOffset={setDateOffset}
                             />
                              <div className="mt-6 flex justify-end gap-4">
                                 <Button onClick={() => setIsOkrModalOpen(true)} variant="secondary">
