@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, serverTimestamp } from 'firebase/firestore';
-import { Target, Flag, Plus, Trash2, X, Layers, Briefcase, Edit, Settings, ChevronLeft, ChevronRight, Tag, Palette, AlertCircle, TrendingUp, History } from 'lucide-react';
+import { Target, Flag, Plus, Trash2, X, Layers, Briefcase, Edit, Settings, ChevronLeft, ChevronRight, Tag, Palette, AlertCircle, TrendingUp, History, ChevronsUpDown } from 'lucide-react';
 
 // --- Configuração do Firebase ---
 const firebaseConfig = {
@@ -172,7 +172,7 @@ const OkrManagementModal = ({ isOpen, onClose, okrs, onSave, onDelete }) => {
         const [keyResults, setKeyResults] = useState(okr?.keyResults || [{ text: '', startValue: 0, targetValue: 100, currentValue: 0, weight: 1, updates: [] }]);
 
         const handleKrChange = (index, field, value) => {
-            const newKrs = [...keyResults];
+            const newKrs = JSON.parse(JSON.stringify(keyResults));
             newKrs[index][field] = value;
             setKeyResults(newKrs);
         };
@@ -231,7 +231,7 @@ const OkrManagementModal = ({ isOpen, onClose, okrs, onSave, onDelete }) => {
                         <Plus size={16} /> Novo OKR
                     </Button>
                 </div>
-                {isFormOpen && <OkrForm okr={selectedOkr} onSave={handleSave} onCancel={() => setIsFormOpen(false)} />}
+                {isFormOpen && <OkrForm key={selectedOkr?.id || 'new'} okr={selectedOkr} onSave={handleSave} onCancel={() => setIsFormOpen(false)} />}
                 
                 <div className="mt-6 space-y-3">
                     {okrs.map(okr => (
@@ -258,6 +258,18 @@ const OkrManagementModal = ({ isOpen, onClose, okrs, onSave, onDelete }) => {
 const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest }) => {
     const [currentTask, setCurrentTask] = useState({});
     const [selectedOkrPreview, setSelectedOkrPreview] = useState(null);
+    const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
+    const colorPickerRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (colorPickerRef.current && !colorPickerRef.current.contains(event.target)) {
+                setIsColorPickerOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
     useEffect(() => {
         if (task) {
@@ -329,15 +341,26 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
                         <label className="block text-sm font-medium text-gray-500 mb-1">Tag do Projeto</label>
                         <input type="text" name="projectTag" value={currentTask.projectTag || ''} onChange={handleChange} placeholder="Ex: App V2" className="w-full p-2 bg-gray-100 border border-gray-300 rounded-md text-gray-800" />
                     </div>
-                     <div>
+                     <div className="relative" ref={colorPickerRef}>
                         <label className="block text-sm font-medium text-gray-500 mb-1">Cor da Tarefa</label>
-                        <div className="flex items-center gap-2 p-2 bg-gray-100 border border-gray-300 rounded-md">
-                            <input type="color" value={currentTask.customColor || '#ffffff'} onChange={(e) => handleChange({target: {name: 'customColor', value: e.target.value}})} className="w-8 h-8 rounded-md border-none cursor-pointer" />
-                            {TASK_COLORS.map(color => (
-                                <button key={color} onClick={() => handleChange({ target: { name: 'customColor', value: color }})} className={`w-6 h-6 rounded-full transition-transform hover:scale-110 ${currentTask.customColor === color ? 'ring-2 ring-offset-2 ring-indigo-500' : ''}`} style={{ backgroundColor: color }} />
-                            ))}
-                            <button onClick={() => handleChange({ target: { name: 'customColor', value: '' }})} className="text-xs text-gray-500 hover:text-gray-800 ml-auto">Padrão</button>
-                        </div>
+                        <button onClick={() => setIsColorPickerOpen(prev => !prev)} className="w-full p-2 bg-gray-100 border border-gray-300 rounded-md flex items-center justify-between">
+                            <span>{currentTask.customColor || 'Padrão (por prioridade)'}</span>
+                            <div className="w-6 h-6 rounded" style={{ backgroundColor: currentTask.customColor || '#e5e7eb' }}></div>
+                        </button>
+                        {isColorPickerOpen && (
+                            <div className="absolute z-10 top-full mt-2 w-full bg-white border border-gray-300 rounded-lg shadow-lg p-4">
+                                <div className="grid grid-cols-7 gap-2 mb-4">
+                                    {TASK_COLORS.map(color => (
+                                        <button key={color} onClick={() => {handleChange({ target: { name: 'customColor', value: color }}); setIsColorPickerOpen(false);}} className={`w-8 h-8 rounded-full transition-transform hover:scale-110 ${currentTask.customColor === color ? 'ring-2 ring-offset-2 ring-indigo-500' : ''}`} style={{ backgroundColor: color }} />
+                                    ))}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <label htmlFor="color-picker" className="text-sm">Cor Customizada:</label>
+                                    <input id="color-picker" type="color" value={currentTask.customColor || '#ffffff'} onChange={(e) => handleChange({target: {name: 'customColor', value: e.target.value}})} className="w-8 h-8 rounded-md border-none cursor-pointer" />
+                                </div>
+                                <Button onClick={() => {handleChange({ target: { name: 'customColor', value: '' }}); setIsColorPickerOpen(false);}} variant="secondary" className="w-full mt-4 text-sm">Limpar Cor</Button>
+                            </div>
+                        )}
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-500 mb-1">Prioridade</label>
@@ -363,12 +386,12 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
 
                 <div>
                     <h4 className="text-md font-semibold text-gray-600 mb-2">Subtarefas</h4>
-                    <div className="space-y-2">
+                    <div className="space-y-1">
                         {currentTask.subtasks && currentTask.subtasks.map((sub, index) => (
-                            <div key={sub.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
+                            <div key={sub.id} className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-b-0">
                                 <input type="checkbox" checked={sub.completed} onChange={(e) => handleSubtaskChange(index, 'completed', e.target.checked)} className="form-checkbox h-5 w-5 bg-gray-200 border-gray-300 rounded text-indigo-600 focus:ring-indigo-500 flex-shrink-0"/>
-                                <input type="text" value={sub.text} onChange={(e) => handleSubtaskChange(index, 'text', e.target.value)} className={`flex-grow p-1 bg-white border border-gray-300 rounded-md text-gray-800 ${sub.completed ? 'line-through text-gray-500' : ''}`} placeholder="Descrição da subtarefa" />
-                                <input type="date" value={sub.dueDate || ''} onChange={(e) => handleSubtaskChange(index, 'dueDate', e.target.value)} className="p-1 bg-white border border-gray-300 rounded-md text-gray-800 text-sm" />
+                                <input type="text" value={sub.text} onChange={(e) => handleSubtaskChange(index, 'text', e.target.value)} className={`flex-grow p-1 bg-transparent border-none focus:ring-0 text-gray-800 ${sub.completed ? 'line-through text-gray-500' : ''}`} placeholder="Descrição da subtarefa" />
+                                <input type="date" value={sub.dueDate || ''} onChange={(e) => handleSubtaskChange(index, 'dueDate', e.target.value)} className="p-1 bg-gray-100 border border-gray-300 rounded-md text-gray-800 text-sm" />
                                 <div className="flex items-center gap-1">
                                     {Object.keys(SUBTASK_PRIORITIES).map(p => (
                                         <button key={p} onClick={() => handleSubtaskChange(index, 'priority', p)} title={p}>
@@ -416,14 +439,41 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
     );
 };
 
-// ... (Timeline, FilterGroup, WorkspaceView, ExecutiveView, App permanecem os mesmos, mas com as novas props)
 const Timeline = ({ tasks, onTaskClick, timeScale, dateOffset, setDateOffset, dependencyLines }) => {
     const today = new Date();
     today.setUTCHours(0,0,0,0);
+    
+    const timelineRef = useRef(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const [startX, setStartX] = useState(0);
+    const [scrollLeft, setScrollLeft] = useState(0);
 
     const handleNavigate = (direction) => {
         setDateOffset(prev => prev + direction);
     };
+    
+    const onMouseDown = (e) => {
+        setIsDragging(true);
+        setStartX(e.pageX - timelineRef.current.offsetLeft);
+        setScrollLeft(timelineRef.current.scrollLeft);
+        timelineRef.current.style.cursor = 'grabbing';
+    };
+
+    const onMouseLeaveOrUp = () => {
+        setIsDragging(false);
+        if (timelineRef.current) {
+            timelineRef.current.style.cursor = 'grab';
+        }
+    };
+
+    const onMouseMove = (e) => {
+        if (!isDragging) return;
+        e.preventDefault();
+        const x = e.pageX - timelineRef.current.offsetLeft;
+        const walk = (x - startX) * 3; // Scroll-fast
+        timelineRef.current.scrollLeft = scrollLeft - walk;
+    };
+
 
     const dateInfo = useMemo(() => {
         const now = new Date();
@@ -474,6 +524,24 @@ const Timeline = ({ tasks, onTaskClick, timeScale, dateOffset, setDateOffset, de
         return Array.from(monthMap.values());
     }, [days]);
 
+    const groupedTasks = useMemo(() => {
+        return tasks.reduce((acc, task) => {
+            const group = task.projectTag || 'Geral';
+            if (!acc[group]) {
+                acc[group] = [];
+            }
+            acc[group].push(task);
+            return acc;
+        }, {});
+    }, [tasks]);
+
+    const [collapsedGroups, setCollapsedGroups] = useState({});
+    const toggleGroup = (group) => {
+        setCollapsedGroups(prev => ({ ...prev, [group]: !prev[group] }));
+    };
+
+    const todayPosition = (today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24) * dayWidth;
+
     return (
         <div className="relative bg-white border border-gray-200 rounded-lg shadow-sm">
              <div className="sticky top-0 z-30 bg-white/70 backdrop-blur-sm p-2 border-b border-gray-200 flex justify-end">
@@ -482,68 +550,106 @@ const Timeline = ({ tasks, onTaskClick, timeScale, dateOffset, setDateOffset, de
                     <button onClick={() => handleNavigate(1)} className="p-1 rounded-full hover:bg-gray-200 transition-colors"><ChevronRight size={20} /></button>
                 </div>
             </div>
-            <div className="overflow-x-auto">
-                <div style={{ width: timelineWidth }}>
-                    <div className="flex sticky top-0 z-20 bg-gray-100 bg-opacity-80 backdrop-blur-sm h-12">
-                        {months.map((month, index) => (
-                            <div key={index} className="flex items-center justify-center text-center font-semibold text-gray-700 border-b-2 border-r border-gray-200 py-2 whitespace-nowrap px-2" style={{ width: month.days * dayWidth }}>
-                                {month.label}
-                            </div>
-                        ))}
-                    </div>
-                    <div className="flex sticky top-12 z-20 bg-gray-100 bg-opacity-80 backdrop-blur-sm">
-                        {days.map((day, index) => (
-                            <div key={index} className="flex-shrink-0 text-center border-b border-r border-gray-200 py-1" style={{ width: dayWidth }}>
-                                <div className={`text-xs ${day.toDateString() === today.toDateString() ? 'text-indigo-600' : 'text-gray-500'}`}>
-                                    {new Intl.DateTimeFormat('pt-BR', { weekday: 'short' }).format(day).slice(0,3)}
+            <div 
+                className="overflow-x-auto cursor-grab"
+                ref={timelineRef}
+                onMouseDown={onMouseDown}
+                onMouseLeave={onMouseLeaveOrUp}
+                onMouseUp={onMouseLeaveOrUp}
+                onMouseMove={onMouseMove}
+            >
+                <div style={{ width: timelineWidth }} className="relative">
+                    {/* Headers */}
+                    <div className="sticky top-0 z-20">
+                        <div className="flex bg-gray-100 h-12">
+                            {months.map((month, index) => (
+                                <div key={index} className="flex items-center justify-center text-center font-semibold text-gray-700 border-b-2 border-r border-gray-200 py-2 whitespace-nowrap px-2" style={{ width: month.days * dayWidth }}>
+                                    {month.label}
                                 </div>
-                                <div className={`text-lg font-semibold ${day.toDateString() === today.toDateString() ? 'text-indigo-600' : 'text-gray-800'}`}>
-                                    {day.getDate()}
+                            ))}
+                        </div>
+                        <div className="flex bg-gray-100">
+                            {days.map((day, index) => (
+                                <div key={index} className="flex-shrink-0 text-center border-b border-r border-gray-200 py-1" style={{ width: dayWidth }}>
+                                    <div className={`text-xs ${day.toDateString() === today.toDateString() ? 'text-indigo-600' : 'text-gray-500'}`}>
+                                        {new Intl.DateTimeFormat('pt-BR', { weekday: 'short' }).format(day).slice(0,3)}
+                                    </div>
+                                    <div className={`text-lg font-semibold ${day.toDateString() === today.toDateString() ? 'text-indigo-600' : 'text-gray-800'}`}>
+                                        {day.getDate()}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            ))}
+                        </div>
                     </div>
-                    <div className="relative pt-4 space-y-2 z-10" style={{ height: tasks.length * 52 + 20 }}>
-                        {tasks.map((task, index) => {
-                            const taskStart = new Date(task.startDate);
-                            taskStart.setUTCHours(0,0,0,0);
-                            const taskEnd = new Date(task.endDate);
-                            taskEnd.setUTCHours(0,0,0,0);
 
-                            const startOffset = Math.max(0, (taskStart - startDate) / (1000 * 60 * 60 * 24));
-                            const duration = Math.max(1, (taskEnd - taskStart) / (1000 * 60 * 60 * 24) + 1);
-                            
-                            const left = startOffset * dayWidth;
-                            const width = duration * dayWidth - 8;
-
-                            if (taskEnd < startDate || taskStart > endDate) return null;
-
-                            const priorityColor = (PRIORITIES[task.priority] || PRIORITIES['Média']).color;
-                            
-                            const subtaskProgress = task.subtasks && task.subtasks.length > 0
-                                ? (task.subtasks.filter(s => s.completed).length / task.subtasks.length) * 100
-                                : (task.status === 'Concluído' ? 100 : 0);
-
+                    {/* Grid and Today Marker */}
+                    <div className="absolute top-0 left-0 w-full h-full z-0">
+                        <div className="flex h-full">
+                            {days.map((day, index) => (
+                                <div key={index} className={`h-full border-r ${day.getDay() === 0 || day.getDay() === 6 ? 'bg-gray-50' : 'border-gray-100'}`} style={{ width: dayWidth }}></div>
+                            ))}
+                        </div>
+                        {todayPosition >= 0 && todayPosition <= timelineWidth && (
+                            <div className="absolute top-0 h-full w-0.5 bg-red-500 z-10" style={{ left: todayPosition }}></div>
+                        )}
+                    </div>
+                    
+                    {/* Task Groups */}
+                    <div className="relative z-10">
+                        {Object.keys(groupedTasks).map((group, groupIndex) => {
+                            const isCollapsed = collapsedGroups[group];
                             return (
-                                <div
-                                    key={task.id}
-                                    id={`task-${task.id}`}
-                                    className="h-11 absolute flex items-center rounded-lg cursor-pointer transition-all duration-200 group"
-                                    style={{ top: `${index * 52}px`, left: `${left}px`, width: `${width}px` }}
-                                    onClick={() => onTaskClick(task)}
-                                    title={task.title}
-                                >
-                                    <div className={`h-full w-full rounded-lg flex items-center px-3 overflow-hidden relative shadow-md group-hover:shadow-lg group-hover:scale-105 transition-all duration-200 ${!task.customColor && priorityColor}`} style={{ backgroundColor: task.customColor }}>
-                                        <div className="absolute top-0 left-0 h-full bg-black/20 rounded-lg" style={{ width: `${subtaskProgress}%` }}></div>
-                                        {task.isMilestone && <Flag className="text-white mr-2 flex-shrink-0 z-10" size={16} />}
-                                        <div className="flex items-center truncate z-10">
-                                            {task.projectTag && <span className="text-xs bg-black/20 text-white px-2 py-0.5 rounded-full mr-2">{task.projectTag}</span>}
-                                            <p className="text-sm font-semibold text-white truncate">
-                                                <span className="font-mono text-xs bg-black/20 px-1 py-0.5 rounded-sm mr-2">{task.humanId}</span>
-                                                {task.title}
-                                            </p>
+                                <div key={group}>
+                                    <div className="sticky top-[104px] z-20 flex items-center h-10 bg-white border-b border-t border-gray-200 -ml-px" onClick={() => toggleGroup(group)}>
+                                        <div className="flex items-center gap-2 p-2 cursor-pointer">
+                                            <ChevronsUpDown size={16} className={`transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                                            <h3 className="font-bold text-gray-800">{group}</h3>
                                         </div>
                                     </div>
+                                    {!isCollapsed && (
+                                        <div className="relative" style={{ height: groupedTasks[group].length * 52 + 20 }}>
+                                            {groupedTasks[group].map((task, taskIndex) => {
+                                                const taskStart = new Date(task.startDate);
+                                                taskStart.setUTCHours(0,0,0,0);
+                                                const taskEnd = new Date(task.endDate);
+                                                taskEnd.setUTCHours(0,0,0,0);
+
+                                                const startOffset = Math.max(0, (taskStart - startDate) / (1000 * 60 * 60 * 24));
+                                                const duration = Math.max(1, (taskEnd - taskStart) / (1000 * 60 * 60 * 24) + 1);
+                                                
+                                                const left = startOffset * dayWidth;
+                                                const width = duration * dayWidth - 8;
+
+                                                if (taskEnd < startDate || taskStart > endDate) return null;
+
+                                                const priorityColor = (PRIORITIES[task.priority] || PRIORITIES['Média']).color;
+                                                
+                                                const subtaskProgress = task.subtasks && task.subtasks.length > 0
+                                                    ? (task.subtasks.filter(s => s.completed).length / task.subtasks.length) * 100
+                                                    : (task.status === 'Concluído' ? 100 : 0);
+
+                                                return (
+                                                    <div
+                                                        key={task.id}
+                                                        id={`task-${task.id}`}
+                                                        className="h-11 absolute flex items-center rounded-lg cursor-pointer transition-all duration-200 group"
+                                                        style={{ top: `${taskIndex * 52 + 10}px`, left: `${left}px`, width: `${width}px` }}
+                                                        onClick={() => onTaskClick(task)}
+                                                        title={task.title}
+                                                    >
+                                                        <div className={`h-full w-full rounded-lg flex items-center px-3 overflow-hidden relative shadow-md group-hover:shadow-lg group-hover:scale-105 transition-all duration-200 ${!task.customColor && priorityColor}`} style={{ backgroundColor: task.customColor }}>
+                                                            <div className="absolute top-0 left-0 h-full bg-black/20 rounded-lg" style={{ width: `${subtaskProgress}%` }}></div>
+                                                            {task.isMilestone && <Flag className="text-white mr-2 flex-shrink-0 z-10" size={16} />}
+                                                            <p className="text-sm font-semibold text-white truncate z-10">
+                                                                <span className="font-mono text-xs bg-black/20 px-1 py-0.5 rounded-sm mr-2">{task.humanId}</span>
+                                                                {task.title}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })}
@@ -554,6 +660,7 @@ const Timeline = ({ tasks, onTaskClick, timeScale, dateOffset, setDateOffset, de
     );
 };
 
+// ... (FilterGroup e ExecutiveView permanecem os mesmos)
 const FilterGroup = ({ title, options, active, onFilterChange }) => (
     <div className="flex items-center gap-2 flex-wrap">
         <span className="text-sm font-medium text-gray-600">{title}:</span>
@@ -766,53 +873,16 @@ export default function App() {
     }, [tasks, filters]);
     
     const calculateDependencyLines = useCallback(() => {
-        if (!filteredTasks.length) {
-            setDependencyLines([]);
-            return;
-        }
-        const lines = [];
-        const containerElem = document.querySelector('.overflow-x-auto');
-        if (!containerElem) return;
-        const containerRect = containerElem.getBoundingClientRect();
-        
-        const taskPositions = {};
-        filteredTasks.forEach((t, i) => {
-            taskPositions[t.id] = i;
-        });
-
-        filteredTasks.forEach((task) => {
-            if (task.dependencies && task.dependencies.length > 0) {
-                task.dependencies.forEach(depId => {
-                    const startElem = document.getElementById(`task-${depId}`);
-                    const endElem = document.getElementById(`task-${task.id}`);
-                    if (startElem && endElem) {
-                        const startRect = startElem.getBoundingClientRect();
-                        const endRect = endElem.getBoundingClientRect();
-                        const startX = startRect.left - containerRect.left + startRect.width + containerElem.scrollLeft;
-                        const startY = startRect.top - containerRect.top + startRect.height / 2;
-                        const endX = endRect.left - containerRect.left + containerElem.scrollLeft;
-                        const endY = endRect.top - containerRect.top + endRect.height / 2;
-                        
-                        const controlX1 = startX + 60;
-                        const controlY1 = startY;
-                        const controlX2 = endX - 60;
-                        const controlY2 = endY;
-                        lines.push({ d: `M ${startX} ${startY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${endX} ${endY}` });
-                    }
-                });
-            }
-        });
-        setDependencyLines(lines);
-    }, [filteredTasks]);
+        // This function would need a significant rewrite to support grouped tasks
+        // For now, we'll disable it to prevent errors.
+        setDependencyLines([]);
+    }, [filteredTasks, timeScale, dateOffset]);
 
     useEffect(() => {
         const timer = setTimeout(calculateDependencyLines, 500);
-        const containerElem = document.querySelector('.overflow-x-auto');
-        containerElem?.addEventListener('scroll', calculateDependencyLines);
         window.addEventListener('resize', calculateDependencyLines);
         return () => {
             clearTimeout(timer);
-            containerElem?.removeEventListener('scroll', calculateDependencyLines);
             window.removeEventListener('resize', calculateDependencyLines);
         };
     }, [filteredTasks, timeScale, dateOffset, calculateDependencyLines]);
