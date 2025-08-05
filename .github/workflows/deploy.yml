@@ -1,44 +1,56 @@
-name: Deploy to GitHub Pages
+name: Deploy React App to GitHub Pages
 
 on:
+  # Executa em pushes direcionados ao branch padrão
   push:
-    branches:
-      - main # Executa quando houver alterações na branch principal
-  workflow_dispatch: # Permite executar manualmente
+    branches: ["main"]
+
+  # Permite que você execute este fluxo de trabalho manualmente na guia Ações
+  workflow_dispatch:
+
+# Define as permissões do GITHUB_TOKEN para permitir a implantação no GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Permite apenas uma implantação simultânea, ignorando as execuções enfileiradas entre a em andamento e a mais recente.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
+  # Tarefa de construção
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout 🛎️
-        uses: actions/checkout@v3
-
-      - name: Setup Node.js ⚙️
-        uses: actions/setup-node@v3
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
-
-      - name: Install dependencies 📦
+          node-version: "18"
+          cache: 'npm'
+      - name: Install dependencies
         run: npm install
-
-      - name: Build project 🏗️
+      - name: Build
         run: npm run build
-
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v1
+        uses: actions/upload-pages-artifact@v3
         with:
-          path: ./build
+          # Carrega a pasta de build
+          path: './build'
 
+  # Tarefa de implantação
   deploy:
-    needs: build-and-deploy
-    permissions:
-      pages: write
-      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    needs: build
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v1
+        uses: actions/deploy-pages@v4
