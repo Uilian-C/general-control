@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc, query } from 'firebase/firestore';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query } from 'firebase/firestore';
 import { Target, Flag, Plus, Trash2, X, Layers, Briefcase, Edit, Settings } from 'lucide-react';
 
-// --- Configuração do Firebase (substituída em ambiente real) ---
+// --- Configuração do Firebase ---
 const firebaseConfig = {
   apiKey: "AIzaSyCESjyYypWPaerOk9jGE2uvcjZlsuH_YrI",
   authDomain: "general-control-fb57b.firebaseapp.com",
@@ -14,22 +14,21 @@ const firebaseConfig = {
   appId: "1:939076716946:web:176240d8cb942b12df194b"
 };
 
-
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
 // --- Constantes e Helpers ---
 const PRIORITIES = {
-  'Alta': { label: 'Alta', color: 'bg-red-400', filterClass: 'bg-red-100 text-red-800' },
-  'Média': { label: 'Média', color: 'bg-yellow-400', filterClass: 'bg-yellow-100 text-yellow-800' },
-  'Baixa': { label: 'Baixa', color: 'bg-blue-400', filterClass: 'bg-blue-100 text-blue-800' },
+  'Alta': { label: 'Alta', color: 'bg-red-400' },
+  'Média': { label: 'Média', color: 'bg-yellow-400' },
+  'Baixa': { label: 'Baixa', color: 'bg-blue-400' },
 };
 
 const STATUSES = {
-  'A Fazer': { label: 'A Fazer', color: 'bg-gray-200 text-gray-800', filterClass: 'bg-gray-200 text-gray-800' },
-  'Em Progresso': { label: 'Em Progresso', color: 'bg-indigo-200 text-indigo-800', filterClass: 'bg-indigo-200 text-indigo-800' },
-  'Concluído': { label: 'Concluído', color: 'bg-green-200 text-green-800', filterClass: 'bg-green-200 text-green-800' },
+  'A Fazer': { label: 'A Fazer', color: 'bg-gray-200 text-gray-800' },
+  'Em Progresso': { label: 'Em Progresso', color: 'bg-indigo-200 text-indigo-800' },
+  'Concluído': { label: 'Concluído', color: 'bg-green-200 text-green-800' },
 };
 
 const formatDate = (dateStr) => {
@@ -53,7 +52,6 @@ const getDaysInView = (startDate, endDate) => {
 };
 
 // --- Componentes da UI ---
-
 const Card = ({ children, className = '' }) => (
     <div className={`bg-white border border-gray-200 rounded-xl p-6 shadow-sm ${className}`}>
         {children}
@@ -244,20 +242,8 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
         setCurrentTask(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
     };
 
-    const handleSubtaskChange = (index, text) => {
-        const newSubtasks = [...currentTask.subtasks];
-        newSubtasks[index].text = text;
-        setCurrentTask(prev => ({ ...prev, subtasks: newSubtasks }));
-    };
-
-    const handleSubtaskToggle = (index) => {
-        const newSubtasks = [...currentTask.subtasks];
-        newSubtasks[index].completed = !newSubtasks[index].completed;
-        setCurrentTask(prev => ({ ...prev, subtasks: newSubtasks }));
-    };
-
     const addSubtask = () => {
-        setCurrentTask(prev => ({ ...prev, subtasks: [...prev.subtasks, { id: `sub_${Date.now()}`, text: '', completed: false }] }));
+        setCurrentTask(prev => ({ ...prev, subtasks: [...(prev.subtasks || []), { id: `sub_${Date.now()}`, text: '', completed: false }] }));
     };
 
     const removeSubtask = (index) => {
@@ -615,7 +601,7 @@ export default function App() {
     const [itemToDelete, setItemToDelete] = useState(null);
 
     useEffect(() => {
-        const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const currentAppId = 'general-control'; // Hardcoded for GitHub Pages
         setAppId(currentAppId);
         
         const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -629,7 +615,7 @@ export default function App() {
     }, []);
 
     useEffect(() => {
-        if (!userId) return;
+        if (!userId || !appId) return;
 
         setIsLoading(true);
         const tasksCollectionPath = `artifacts/${appId}/public/data/roadmap_tasks`;
@@ -653,7 +639,8 @@ export default function App() {
     const handleSaveTask = async (taskData) => {
         const collectionPath = `artifacts/${appId}/public/data/roadmap_tasks`;
         if (taskData.id) {
-            await updateDoc(doc(db, collectionPath, taskData.id), taskData);
+            const { id, ...dataToUpdate } = taskData;
+            await updateDoc(doc(db, collectionPath, id), dataToUpdate);
         } else {
             await addDoc(collection(db, collectionPath), taskData);
         }
@@ -662,7 +649,8 @@ export default function App() {
     const handleSaveOkr = async (okrData) => {
         const collectionPath = `artifacts/${appId}/public/data/okrs`;
         if (okrData.id) {
-            await updateDoc(doc(db, collectionPath, okrData.id), okrData);
+            const { id, ...dataToUpdate } = okrData;
+            await updateDoc(doc(db, collectionPath, id), dataToUpdate);
         } else {
             await addDoc(collection(db, collectionPath), okrData);
         }
