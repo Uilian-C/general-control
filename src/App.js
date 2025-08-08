@@ -267,8 +267,8 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
         }
     };
 
-    const handleBlockerReasonChange = (logId, reason) => {
-        const newLog = (currentTask.blockerLog || []).map(b => b.id === logId ? { ...b, blockReason: reason } : b);
+    const handleBlockerLogChange = (logId, field, value) => {
+        const newLog = (currentTask.blockerLog || []).map(b => b.id === logId ? { ...b, [field]: value } : b);
         setCurrentTask(prev => ({ ...prev, blockerLog: newLog }));
     };
     
@@ -398,8 +398,21 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
                             </button>
                         </div>
                         {activeBlocker && (
-                            <div className="mt-2 space-y-2">
-                                <textarea value={activeBlocker.blockReason} onChange={e => handleBlockerReasonChange(activeBlocker.id, e.target.value)} placeholder="Motivo do bloqueio..." className="w-full p-2 border border-gray-300 rounded-md h-20"></textarea>
+                            <div className="mt-2 space-y-2 p-2 bg-red-50 rounded-md border border-red-200">
+                                <label className="text-xs font-medium text-gray-500">Data do Bloqueio</label>
+                                <input 
+                                    type="date" 
+                                    value={activeBlocker.blockDate ? activeBlocker.blockDate.split('T')[0] : ''} 
+                                    onChange={e => handleBlockerLogChange(activeBlocker.id, 'blockDate', new Date(e.target.value).toISOString())} 
+                                    className="w-full p-2 border border-gray-300 rounded-md" 
+                                />
+                                <label className="text-xs font-medium text-gray-500">Motivo</label>
+                                <textarea 
+                                    value={activeBlocker.blockReason} 
+                                    onChange={e => handleBlockerLogChange(activeBlocker.id, 'blockReason', e.target.value)} 
+                                    placeholder="Motivo do bloqueio..." 
+                                    className="w-full p-2 border border-gray-300 rounded-md h-20">
+                                </textarea>
                             </div>
                         )}
                     </div>
@@ -1457,3 +1470,4 @@ export default function App() {
         </div>
     );
 }
+
