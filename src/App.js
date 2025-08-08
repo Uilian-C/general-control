@@ -2,11 +2,12 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, serverTimestamp } from 'firebase/firestore';
-import { Target, Flag, Plus, Trash2, X, Layers, Briefcase, Edit, Settings, Tag, Palette, TrendingUp, Download, Calendar, ListTodo, ZoomIn, ZoomOut, ChevronsUpDown, CheckCircle, MoreVertical, History, Check, Zap, ChevronDown, LayoutGrid, List, AlertTriangle, Clock, TrendingUp as TrendingUpIcon } from 'lucide-react';
+import { Target, Flag, Plus, Trash2, X, Layers, Briefcase, Edit, Settings, Tag, Palette, TrendingUp, Download, Calendar, ListTodo, ZoomIn, ZoomOut, ChevronsUpDown, CheckCircle, MoreVertical, History, Check, Zap, ChevronDown, LayoutGrid, List, AlertTriangle, Clock, TrendingUp as TrendingUpIcon, Lock, Unlock } from 'lucide-react';
 
-// --- Bibliotecas para Exportação PDF (assumidas como disponíveis globalmente) ---
-// <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-// <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+// --- ATENÇÃO: Para a funcionalidade de exportar PDF funcionar ---
+// Adicione estas duas linhas no <head> do seu arquivo HTML principal (ex: index.html)
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 // --- Configuração do Firebase ---
 const firebaseConfig = {
@@ -38,7 +39,9 @@ const STATUSES = {
   'A Fazer': { label: 'A Fazer', color: 'bg-gray-200 text-gray-800', iconColor: 'text-gray-400' },
   'Em Progresso': { label: 'Em Progresso', color: 'bg-indigo-200 text-indigo-800', iconColor: 'text-indigo-400' },
   'Concluído': { label: 'Concluído', color: 'bg-green-200 text-green-800', iconColor: 'text-green-500' },
+  'Bloqueado': { label: 'Bloqueado', color: 'bg-red-200 text-red-800', iconColor: 'text-red-500' },
 };
+const TASK_COLORS = ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#c084fc', '#f472b6', '#a3a3a3'];
 
 const formatDate = (dateInput, includeTime = true) => {
   if (!dateInput) return '';
@@ -127,7 +130,7 @@ const Button = ({ onClick, children, className = '', variant = 'primary', disabl
         ghost: 'bg-transparent text-gray-600 hover:bg-gray-100 focus:ring-gray-400'
     };
     return (
-        <button onClick={onClick} className={`${baseClasses} ${variantClasses[variant]} ${className}`} disabled={disabled}>
+        <button type="button" onClick={onClick} className={`${baseClasses} ${variantClasses[variant]} ${className}`} disabled={disabled}>
             {children}
         </button>
     );
@@ -164,39 +167,109 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, children }) => {
 
 const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest }) => {
     const [currentTask, setCurrentTask] = useState({});
-    const [selectedOkrPreview, setSelectedOkrPreview] = useState(null);
-    const cleanInputClass = "w-full p-2 bg-transparent border-b-2 border-gray-200 focus:border-indigo-500 focus:outline-none focus:ring-0 transition-colors";
-    const cleanSelectClass = `${cleanInputClass} appearance-none`;
-    const sectionClass = "py-6 border-b border-gray-200 last:border-b-0";
+    const [newProject, setNewProject] = useState('');
+    const [isCreatingProject, setIsCreatingProject] = useState(false);
     
+    const displayProjectList = useMemo(() => {
+        const projects = new Set(tasks.map(t => t.projectTag).filter(Boolean));
+        if (currentTask.projectTag && !projects.has(currentTask.projectTag)) {
+            projects.add(currentTask.projectTag);
+        }
+        return Array.from(projects).sort();
+    }, [tasks, currentTask.projectTag]);
+
+    const allLabels = useMemo(() => {
+        const labelSet = new Set();
+        tasks.forEach(task => (task.labels || []).forEach(label => labelSet.add(label)));
+        return Array.from(labelSet).sort();
+    }, [tasks]);
+
     useEffect(() => {
+        const today = new Date().toISOString().split('T')[0];
         if (task) {
-            setCurrentTask({ ...task, dependencies: task.dependencies || [], subtasks: task.subtasks || [], customColor: task.customColor || '' });
-            if (task.okrId) {
-                const okrToPreview = okrs.find(o => o.id === task.okrId);
-                setSelectedOkrPreview(okrToPreview);
-            } else {
-                setSelectedOkrPreview(null);
-            }
+            setCurrentTask({
+                ...task,
+                labels: task.labels || [],
+                blockerLog: task.blockerLog || [],
+                okrLink: task.okrLink || { okrId: '', krId: '' },
+                customColor: task.customColor || ''
+            });
         } else {
-            const today = new Date().toISOString().split('T')[0];
             setCurrentTask({
                 title: '', description: '', priority: 'Média', status: 'A Fazer',
-                startDate: today, endDate: today, isMilestone: false, okrId: '',
-                dependencies: [], subtasks: [], projectTag: '', customColor: ''
+                startDate: today, endDate: today, isMilestone: false,
+                okrLink: { okrId: '', krId: '' },
+                labels: [], projectTag: '',
+                blockerLog: [],
+                customColor: ''
             });
-            setSelectedOkrPreview(null);
         }
-    }, [task, isOpen, okrs]);
+    }, [task, isOpen]);
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
-        let finalValue = type === 'checkbox' ? checked : value;
-        setCurrentTask(prev => ({ ...prev, [name]: finalValue }));
-        if (name === 'okrId') {
-            const okrToPreview = okrs.find(o => o.id === value);
-            setSelectedOkrPreview(okrToPreview);
+        setCurrentTask(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    };
+
+    const handleOkrLinkChange = (e) => {
+        const [okrId, krId] = e.target.value.split('_');
+        setCurrentTask(prev => ({ ...prev, okrLink: { okrId, krId: krId || '' } }));
+    };
+    
+    const handleLabelsChange = (e) => {
+        const labels = e.target.value.split(',').map(l => l.trim()).filter(Boolean);
+        setCurrentTask(prev => ({ ...prev, labels }));
+    };
+    
+    const handleLabelClick = (label) => {
+        const currentLabels = currentTask.labels || [];
+        const newLabels = currentLabels.includes(label)
+            ? currentLabels.filter(l => l !== label)
+            : [...currentLabels, label];
+        setCurrentTask(prev => ({ ...prev, labels: newLabels }));
+    };
+
+    const handleProjectChange = (e) => {
+        const { value } = e.target;
+        if (value === '_new_') {
+            setIsCreatingProject(true);
+            setCurrentTask(prev => ({ ...prev, projectTag: '' }));
+        } else {
+            setIsCreatingProject(false);
+            setNewProject('');
+            setCurrentTask(prev => ({ ...prev, projectTag: value }));
         }
+    };
+
+    const handleNewProjectCreate = () => {
+        if (newProject.trim()) {
+            setCurrentTask(prev => ({ ...prev, projectTag: newProject.trim() }));
+            setIsCreatingProject(false);
+            setNewProject('');
+        }
+    };
+    
+    const handleBlockerToggle = () => {
+        const isActiveBlocker = (currentTask.blockerLog || []).some(b => !b.unblockDate);
+        if (isActiveBlocker) { // Unblocking
+            const newLog = (currentTask.blockerLog || []).map(b => 
+                !b.unblockDate ? { ...b, unblockDate: new Date().toISOString() } : b
+            );
+            setCurrentTask(prev => ({ ...prev, blockerLog: newLog, status: 'A Fazer' }));
+        } else { // Blocking
+            const newLog = [...(currentTask.blockerLog || []), {
+                id: `block_${Date.now()}`,
+                blockDate: new Date().toISOString(),
+                blockReason: '',
+                unblockDate: null
+            }];
+            setCurrentTask(prev => ({ ...prev, blockerLog: newLog, status: 'Bloqueado' }));
+        }
+    };
+
+    const handleBlockerReasonChange = (logId, reason) => {
+        const newLog = (currentTask.blockerLog || []).map(b => b.id === logId ? { ...b, blockReason: reason } : b);
+        setCurrentTask(prev => ({ ...prev, blockerLog: newLog }));
     };
     
     const handleSubtaskChange = (index, field, value) => {
@@ -206,13 +279,17 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
     };
 
     const addSubtask = () => {
-        const newSubtask = { id: `sub_${Date.now()}`, text: '', completed: false };
+        const newSubtask = { id: `sub_${Date.now()}`, text: '', completed: false, targetDate: '' };
         setCurrentTask(prev => ({ ...prev, subtasks: [...(prev.subtasks || []), newSubtask] }));
     };
 
     const removeSubtask = (index) => {
         const newSubtasks = (currentTask.subtasks || []).filter((_, i) => i !== index);
         setCurrentTask(prev => ({ ...prev, subtasks: newSubtasks }));
+    };
+    
+    const handleColorChange = (color) => {
+        setCurrentTask(prev => ({...prev, customColor: color}));
     };
 
     const handleSave = () => {
@@ -222,88 +299,118 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
 
     if (!isOpen) return null;
     
-    const okrProgress = selectedOkrPreview ? calculateOkrProgress(selectedOkrPreview) : 0;
+    const activeBlocker = (currentTask.blockerLog || []).find(b => !b.unblockDate);
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={task?.humanId ? `Editar Tarefa [${task.humanId}]` : "Nova Tarefa"} size="2xl">
-            <div className="space-y-0 text-gray-700">
-                <section className={sectionClass}>
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2"><Edit size={18} className="text-gray-400" /> Detalhes Principais</h3>
-                    <div className="space-y-4">
-                        <input type="text" name="title" value={currentTask.title || ''} onChange={handleChange} placeholder="Título da Tarefa" className={`${cleanInputClass} text-2xl font-bold`} />
-                        <textarea name="description" value={currentTask.description || ''} onChange={handleChange} placeholder="Adicione uma descrição..." className={`${cleanInputClass} h-20`}></textarea>
+        <Modal isOpen={isOpen} onClose={onClose} title={task?.humanId ? `Editar Tarefa [${task.humanId}]` : "Nova Tarefa"} size="4xl">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div className="md:col-span-2 space-y-6">
+                    <input type="text" name="title" value={currentTask.title || ''} onChange={handleChange} placeholder="Título da Tarefa" className="w-full p-2 bg-transparent text-2xl font-bold border-b-2 border-gray-200 focus:border-indigo-500 focus:outline-none" />
+                    <textarea name="description" value={currentTask.description || ''} onChange={handleChange} placeholder="Adicione uma descrição..." className="w-full p-2 bg-gray-50 rounded-md h-32 border border-gray-200 focus:border-indigo-500 focus:outline-none"></textarea>
+                    
+                    <div>
+                        <h3 className="font-semibold mb-2">Subtarefas</h3>
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                             {(currentTask.subtasks || []).map((sub, index) => (
+                                <div key={sub.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-md">
+                                    <input type="checkbox" checked={sub.completed} onChange={(e) => handleSubtaskChange(index, 'completed', e.target.checked)} className="h-5 w-5 rounded text-indigo-600" />
+                                    <input type="text" value={sub.text} onChange={(e) => handleSubtaskChange(index, 'text', e.target.value)} className={`flex-grow p-1 bg-transparent border-b ${sub.completed ? 'line-through text-gray-500' : ''}`} placeholder="Descrição da subtarefa"/>
+                                    <input type="date" value={sub.targetDate || ''} onChange={(e) => handleSubtaskChange(index, 'targetDate', e.target.value)} className="p-1 text-sm border rounded-md" />
+                                    <button onClick={() => removeSubtask(index)}><Trash2 size={16} className="text-red-400 hover:text-red-600" /></button>
+                                </div>
+                            ))}
+                        </div>
+                         <Button onClick={addSubtask} variant="secondary" className="mt-2 text-sm">Adicionar Subtarefa</Button>
                     </div>
-                </section>
-                <section className={sectionClass}>
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2"><Calendar size={18} className="text-gray-400" /> Planejamento</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500">Início</label>
-                            <input type="date" name="startDate" value={currentTask.startDate || ''} onChange={handleChange} className={cleanInputClass} />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500">Fim</label>
-                            <input type="date" name="endDate" value={currentTask.endDate || ''} onChange={handleChange} className={cleanInputClass} />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500">Prioridade</label>
-                            <select name="priority" value={currentTask.priority || 'Média'} onChange={handleChange} className={cleanSelectClass}>
-                                {Object.keys(PRIORITIES).map(p => <option key={p} value={p}>{PRIORITIES[p].label}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500">Status</label>
-                            <select name="status" value={currentTask.status || 'A Fazer'} onChange={handleChange} className={cleanSelectClass}>
-                                {Object.keys(STATUSES).map(s => <option key={s} value={s}>{STATUSES[s].label}</option>)}
-                            </select>
+                </div>
+
+                <div className="md:col-span-1 space-y-4 bg-gray-50 p-4 rounded-lg">
+                    <div className="space-y-1">
+                        <label className="block text-sm font-medium text-gray-600">Status</label>
+                        <select name="status" value={currentTask.status || 'A Fazer'} onChange={handleChange} disabled={!!activeBlocker} className="w-full p-2 border border-gray-300 rounded-md">
+                            {Object.keys(STATUSES).map(s => <option key={s} value={s}>{STATUSES[s].label}</option>)}
+                        </select>
+                    </div>
+                     <div className="space-y-1">
+                        <label className="block text-sm font-medium text-gray-600">Datas</label>
+                        <div className="space-y-2">
+                            <input type="date" name="startDate" value={currentTask.startDate || ''} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-md" />
+                            <input type="date" name="endDate" value={currentTask.endDate || ''} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-md" />
                         </div>
                     </div>
-                </section>
-                <section className={sectionClass}>
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2"><ListTodo size={18} className="text-gray-400" /> Subtarefas</h3>
-                    <div className="space-y-1 max-h-48 overflow-y-auto pr-2">
-                        {(currentTask.subtasks || []).map((sub, index) => (
-                            <div key={sub.id} className="flex items-center gap-3 py-1 border-b border-gray-100 last:border-b-0">
-                                <input type="checkbox" checked={sub.completed} onChange={(e) => handleSubtaskChange(index, 'completed', e.target.checked)} className="form-checkbox h-5 w-5 bg-gray-200 border-gray-300 rounded text-indigo-600 focus:ring-indigo-500 flex-shrink-0" />
-                                <input type="text" value={sub.text} onChange={(e) => handleSubtaskChange(index, 'text', e.target.value)} className={`flex-grow p-1 bg-transparent border-none focus:ring-0 text-gray-800 ${sub.completed ? 'line-through text-gray-500' : ''}`} placeholder="Descrição da subtarefa" />
-                                <button onClick={() => removeSubtask(index)} className="text-red-500 hover:text-red-400"><Trash2 size={16} /></button>
-                            </div>
-                        ))}
+                    <div className="space-y-1">
+                        <label className="block text-sm font-medium text-gray-600">Prioridade</label>
+                        <select name="priority" value={currentTask.priority || 'Média'} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-md">
+                            {Object.keys(PRIORITIES).map(p => <option key={p} value={p}>{PRIORITIES[p].label}</option>)}
+                        </select>
                     </div>
-                    <Button onClick={addSubtask} variant="secondary" className="mt-4 text-sm"><Plus size={16} /> Adicionar Subtarefa</Button>
-                </section>
-                <section className={sectionClass}>
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2"><Target size={18} className="text-gray-400" /> Conexões e Tags</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500">Vincular ao OKR</label>
-                            <select name="okrId" value={currentTask.okrId || ''} onChange={handleChange} className={cleanSelectClass}>
+                     <div className="space-y-1">
+                        <label className="block text-sm font-medium text-gray-600">Projeto</label>
+                        {!isCreatingProject ? (
+                            <select value={currentTask.projectTag || ''} onChange={handleProjectChange} className="w-full p-2 border border-gray-300 rounded-md">
                                 <option value="">Nenhum</option>
-                                {okrs.map(okr => <option key={okr.id} value={okr.id}>{okr.objective}</option>)}
+                                {displayProjectList.map(p => <option key={p} value={p}>{p}</option>)}
+                                <option value="_new_">-- Criar Novo Projeto --</option>
                             </select>
-                        </div>
-                         <div>
-                            <label className="block text-xs font-medium text-gray-500">Tag do Projeto</label>
-                            <input type="text" name="projectTag" value={currentTask.projectTag || ''} onChange={handleChange} placeholder="#nome-do-projeto" className={cleanInputClass} />
-                        </div>
-                    </div>
-                    {selectedOkrPreview && (
-                        <div className="mt-4 pt-3 border-t border-gray-200">
-                            <div className="flex justify-between items-baseline mb-1">
-                                <span className="text-sm font-semibold text-gray-600">{selectedOkrPreview.objective}</span>
-                                <span className="text-sm font-bold text-indigo-600">{okrProgress}%</span>
+                        ) : (
+                            <div className="flex gap-2">
+                                <input type="text" value={newProject} onChange={e => setNewProject(e.target.value)} placeholder="Nome do novo projeto" className="w-full p-2 border border-gray-300 rounded-md" />
+                                <Button onClick={handleNewProjectCreate}><Check size={16} /></Button>
                             </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2"><div className="bg-indigo-600 h-2 rounded-full" style={{ width: `${okrProgress}%` }}></div></div>
-                        </div>
-                    )}
-                </section>
-                <footer className="flex justify-between items-center space-x-4 pt-6 mt-2">
-                    <div>{task && <Button onClick={() => onDeleteRequest(task.id, 'task')} variant="danger"><Trash2 size={16} /> Excluir</Button>}</div>
-                    <div className="flex items-center space-x-4">
-                        <Button onClick={onClose} variant="secondary">Cancelar</Button>
-                        <Button onClick={handleSave} variant="primary">Salvar</Button>
+                        )}
                     </div>
-                </footer>
+                     <div className="space-y-1">
+                        <label className="block text-sm font-medium text-gray-600">Etiquetas</label>
+                        <input type="text" value={(currentTask.labels || []).join(', ')} onChange={handleLabelsChange} className="w-full p-2 border border-gray-300 rounded-md" placeholder="Ex: UX, Backend, Marketing" />
+                        <div className="flex flex-wrap gap-2 mt-2">
+                            {allLabels.map(label => (
+                                <button key={label} onClick={() => handleLabelClick(label)} className={`px-2 py-1 text-xs rounded-full ${ (currentTask.labels || []).includes(label) ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>{label}</button>
+                            ))}
+                        </div>
+                    </div>
+                     <div className="space-y-1">
+                        <label className="block text-sm font-medium text-gray-600">Vincular ao OKR</label>
+                        <select value={`${currentTask.okrLink?.okrId || ''}_${currentTask.okrLink?.krId || ''}`} onChange={handleOkrLinkChange} className="w-full p-2 border border-gray-300 rounded-md">
+                            <option value="_">Nenhum</option>
+                            {okrs.map(okr => (
+                                <optgroup key={okr.id} label={okr.objective}>
+                                    <option value={`${okr.id}_`}>-- Objetivo Geral --</option>
+                                    {(okr.keyResults || []).map(kr => <option key={kr.id} value={`${okr.id}_${kr.id}`}>{kr.text}</option>)}
+                                </optgroup>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="space-y-1">
+                        <label className="block text-sm font-medium text-gray-600">Cor</label>
+                        <div className="flex gap-2">
+                             {TASK_COLORS.map(color => (
+                                <button key={color} onClick={() => handleColorChange(color)} className="w-6 h-6 rounded-full transition-transform hover:scale-110" style={{backgroundColor: color}}>
+                                    {currentTask.customColor === color && <Check size={16} className="text-white m-auto"/>}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                            <label className="block text-sm font-medium text-gray-600">Bloqueado</label>
+                            <button onClick={handleBlockerToggle} className={`p-2 rounded-full ${activeBlocker ? 'bg-red-500 text-white' : 'bg-gray-200'}`}>
+                                {activeBlocker ? <Unlock size={16} /> : <Lock size={16} />}
+                            </button>
+                        </div>
+                        {activeBlocker && (
+                            <div className="mt-2 space-y-2">
+                                <textarea value={activeBlocker.blockReason} onChange={e => handleBlockerReasonChange(activeBlocker.id, e.target.value)} placeholder="Motivo do bloqueio..." className="w-full p-2 border border-gray-300 rounded-md h-20"></textarea>
+                            </div>
+                        )}
+                    </div>
+                </div>
+                <div className="md:col-span-3 flex justify-between items-center pt-6 border-t">
+                    <div>{task && <Button onClick={() => onDeleteRequest(task.id, 'task')} variant="danger"><Trash2 size={16} /> Excluir</Button>}</div>
+                    <div className="flex gap-4">
+                        <Button onClick={onClose} variant="secondary">Cancelar</Button>
+                        <Button onClick={handleSave}>Salvar Tarefa</Button>
+                    </div>
+                </div>
             </div>
         </Modal>
     );
@@ -421,15 +528,32 @@ const Timeline = ({ tasks, onTaskClick, zoomLevel, viewStartDate }) => {
                                                 const taskStart = new Date(task.startDate); taskStart.setUTCHours(0, 0, 0, 0); const taskEnd = new Date(task.endDate); taskEnd.setUTCHours(0, 0, 0, 0);
                                                 if (taskEnd < viewStartDate || taskStart > new Date(viewStartDate).setDate(viewStartDate.getDate() + 45)) return null;
                                                 const startOffset = (taskStart.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24); const duration = Math.max(1, (taskEnd.getTime() - taskStart.getTime()) / (1000 * 60 * 60 * 24) + 1); const left = startOffset * dayWidth; const width = duration * dayWidth - 4;
-                                                const subtaskProgress = (task.subtasks || []).length > 0 ? ((task.subtasks.filter(s => s.completed).length / task.subtasks.length) * 100) : (task.status === 'Concluído' ? 100 : 0);
+                                                const progress = calculateTaskProgress(task);
+                                                const daysRemaining = Math.ceil((taskEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                                                
                                                 return (
-                                                    <div key={task.id} id={`task-${task.id}`} className="h-10 absolute flex items-center rounded-lg cursor-pointer transition-all duration-200 group" style={{ top: `${taskIndex * 48 + 5}px`, left: `${left}px`, width: `${width}px` }} onClick={() => onTaskClick(task)} title={`${task.title} - ${STATUSES[task.status]?.label} (${Math.round(subtaskProgress)}%)`}>
-                                                        <div className={`h-full w-full rounded-lg flex items-center overflow-hidden relative shadow-md group-hover:shadow-lg group-hover:scale-[1.02] transition-all duration-200 ${!task.customColor ? 'bg-gradient-to-r from-gray-400 to-gray-500' : ''}`} style={task.customColor ? { backgroundColor: task.customColor } : {}}>
-                                                            <div className="absolute top-0 left-0 h-full bg-black/20" style={{ width: `${subtaskProgress}%` }}></div>
-                                                            {!task.customColor && <div className="absolute top-0 left-0 h-full bg-gradient-to-r from-indigo-500 to-sky-500 opacity-80" style={{ width: `${subtaskProgress}%` }}></div>}
+                                                    <div key={task.id} id={`task-${task.id}`} className="h-10 absolute flex items-center rounded-lg cursor-pointer transition-all duration-200 group" style={{ top: `${taskIndex * 48 + 5}px`, left: `${left}px`, width: `${width}px` }} onClick={() => onTaskClick(task)} title={`${task.title} - ${task.status} (${Math.round(progress)}%)`}>
+                                                        <div 
+                                                            className={`h-full w-full rounded-lg flex items-center overflow-hidden relative shadow-md group-hover:shadow-lg group-hover:scale-[1.02] transition-all duration-200`}
+                                                            style={{ 
+                                                                backgroundColor: task.blockerLog?.some(b => !b.unblockDate) 
+                                                                    ? '#f87171' // red-400
+                                                                    : task.customColor || '#9ca3af' // gray-400
+                                                            }}
+                                                        >
+                                                            <div className="absolute top-0 left-0 h-full bg-black/20" style={{ width: `${progress}%` }}></div>
                                                             <div className="relative z-10 flex items-center justify-between w-full px-2">
-                                                                <p className="text-sm font-semibold text-white truncate flex-grow">{task.title}</p>
-                                                                <div className="flex items-center gap-2 flex-shrink-0">{width > 150 && (<span className={`text-xs px-1.5 py-0.5 rounded-full ${STATUSES[task.status]?.color} bg-opacity-70 backdrop-blur-sm`}>{STATUSES[task.status]?.label}</span>)}{width > 80 && (<span className="text-xs text-white font-semibold bg-black/20 px-1.5 py-0.5 rounded-full">{Math.round(subtaskProgress)}%</span>)}</div>
+                                                                <div className="flex items-center gap-2">
+                                                                    {task.blockerLog?.some(b => !b.unblockDate) && <Lock size={12} className="text-white flex-shrink-0" />}
+                                                                    <p className="text-sm font-semibold text-white truncate">{task.title}</p>
+                                                                </div>
+                                                                <div className="flex items-center gap-2 flex-shrink-0">
+                                                                    {width > 120 && <span className={`text-xs px-1.5 py-0.5 rounded-full ${STATUSES[task.status]?.color} bg-opacity-70 backdrop-blur-sm`}>{STATUSES[task.status]?.label}</span>}
+                                                                    {width > 80 && <span className="text-xs text-white font-semibold bg-black/20 px-1.5 py-0.5 rounded-full">{progress}%</span>}
+                                                                    {daysRemaining > 0 && task.status !== 'Concluído' && width > 100 && (
+                                                                        <span className="text-xs text-white bg-black/20 px-1.5 py-0.5 rounded-full">{daysRemaining}d</span>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -447,30 +571,89 @@ const Timeline = ({ tasks, onTaskClick, zoomLevel, viewStartDate }) => {
     );
 };
 
-const FilterGroup = ({ title, options, active, onFilterChange }) => (
-    <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-sm font-medium text-gray-600">{title}:</span>
-        <div className="flex items-center gap-2 rounded-lg bg-gray-100 p-1">
-            <button onClick={() => onFilterChange('Todos')} className={`px-3 py-1 text-sm rounded-md transition-colors ${active === 'Todos' ? 'bg-white shadow-sm text-indigo-600 font-semibold' : 'text-gray-600 hover:bg-gray-200'}`}>Todos</button>
-            {Object.keys(options).map(key => (<button key={key} onClick={() => onFilterChange(key)} className={`px-3 py-1 text-sm rounded-md transition-colors ${active === key ? 'bg-white shadow-sm text-indigo-600 font-semibold' : 'text-gray-600 hover:bg-gray-200'}`}>{options[key].label}</button>))}
+const FilterGroup = ({ title, options, active, onFilterChange, isMultiSelect = false, activeFilters = [] }) => {
+    const allLabels = Object.keys(options);
+
+    if (isMultiSelect) {
+        return (
+            <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-medium text-gray-600">{title}:</span>
+                <div className="flex items-center gap-2 rounded-lg bg-gray-100 p-1">
+                    {allLabels.map(key => (
+                        <button
+                            key={key}
+                            onClick={() => onFilterChange(key)}
+                            className={`px-3 py-1 text-sm rounded-md transition-colors ${activeFilters.includes(key) ? 'bg-indigo-600 shadow-sm text-white font-semibold' : 'text-gray-600 hover:bg-gray-200'}`}
+                        >
+                            {options[key].label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium text-gray-600">{title}:</span>
+            <div className="flex items-center gap-2 rounded-lg bg-gray-100 p-1">
+                <button
+                    onClick={() => onFilterChange('Todos')}
+                    className={`px-3 py-1 text-sm rounded-md transition-colors ${active === 'Todos' ? 'bg-white shadow-sm text-indigo-600 font-semibold' : 'text-gray-600 hover:bg-gray-200'}`}
+                >
+                    Todos
+                </button>
+                {allLabels.map(key => (
+                    <button
+                        key={key}
+                        onClick={() => onFilterChange(key)}
+                        className={`px-3 py-1 text-sm rounded-md transition-colors ${active === key ? 'bg-white shadow-sm text-indigo-600 font-semibold' : 'text-gray-600 hover:bg-gray-200'}`}
+                    >
+                        {options[key].label}
+                    </button>
+                ))}
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 const WorkspaceView = ({ tasks, onTaskClick, filters, setFilters, zoomLevel, setZoomLevel, viewStartDate, setViewStartDate, onOpenTaskModal }) => {
+    const allLabels = useMemo(() => {
+        const labelSet = new Set();
+        tasks.forEach(task => (task.labels || []).forEach(label => labelSet.add(label)));
+        const labelOptions = {};
+        Array.from(labelSet).sort().forEach(label => {
+            labelOptions[label] = { label };
+        });
+        return labelOptions;
+    }, [tasks]);
+
+    const handleLabelFilterChange = (label) => {
+        const currentLabels = filters.labels || [];
+        const newLabels = currentLabels.includes(label)
+            ? currentLabels.filter(l => l !== label)
+            : [...currentLabels, label];
+        setFilters({ ...filters, labels: newLabels });
+    };
+
     return (
         <div className="space-y-6">
             <Card>
-                <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-2"><Button onClick={() => setViewStartDate(new Date(new Date().setDate(new Date().getDate() - 15)))} variant="secondary">Hoje</Button></div>
-                    <div className="flex flex-wrap justify-center items-center gap-4">
+                <div className="flex flex-col gap-4">
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                         <div className="flex items-center gap-2"><Button onClick={() => setViewStartDate(new Date(new Date().setDate(new Date().getDate() - 15)))} variant="secondary">Hoje</Button></div>
+                         <div className="flex items-center gap-2">
+                            <button onClick={() => setZoomLevel(z => Math.max(1, z - 1))} className="p-2 rounded-full hover:bg-gray-200 transition-colors"><ZoomOut size={20} /></button>
+                            <input type="range" min="1" max="10" value={zoomLevel} onChange={e => setZoomLevel(Number(e.target.value))} className="w-24" />
+                            <button onClick={() => setZoomLevel(z => Math.min(10, z + 1))} className="p-2 rounded-full hover:bg-gray-200 transition-colors"><ZoomIn size={20} /></button>
+                        </div>
+                    </div>
+                     <div className="flex flex-wrap justify-start items-center gap-4">
                         <FilterGroup title="Prioridade" options={PRIORITIES} active={filters.priority} onFilterChange={val => setFilters({...filters, priority: val})}/>
                         <FilterGroup title="Status" options={STATUSES} active={filters.status} onFilterChange={val => setFilters({...filters, status: val})}/>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button onClick={() => setZoomLevel(z => Math.max(1, z - 1))} className="p-2 rounded-full hover:bg-gray-200 transition-colors"><ZoomOut size={20} /></button>
-                        <input type="range" min="1" max="10" value={zoomLevel} onChange={e => setZoomLevel(Number(e.target.value))} className="w-24" />
-                        <button onClick={() => setZoomLevel(z => Math.min(10, z + 1))} className="p-2 rounded-full hover:bg-gray-200 transition-colors"><ZoomIn size={20} /></button>
+                        {Object.keys(allLabels).length > 0 && (
+                            <FilterGroup title="Etiquetas" options={allLabels} isMultiSelect activeFilters={filters.labels || []} onFilterChange={handleLabelFilterChange}/>
+                        )}
                     </div>
                 </div>
             </Card>
@@ -484,27 +667,32 @@ const WorkspaceView = ({ tasks, onTaskClick, filters, setFilters, zoomLevel, set
 
 // --- NOVA VISÃO EXECUTIVA (REFORMULADA) ---
 
-const ExecutiveView = ({ tasks, okrs }) => {
+const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
     const executiveViewRef = useRef(null);
     const [isExporting, setIsExporting] = useState(false);
+    const [nextStepsPriority, setNextStepsPriority] = useState('Alta');
 
     const {
         overallRoadmapProgress,
-        roadmapByProject,
+        overallOkrProgress,
+        projectStatusSummary,
         okrsWithProgress,
         attentionPoints,
         nextSteps
     } = useMemo(() => {
         const today = new Date();
         
-        let totalWeightedProgress = 0;
-        let totalDuration = 0;
-        tasks.forEach(task => {
+        const roadmapMetrics = tasks.reduce((acc, task) => {
             const duration = getTaskDurationInDays(task);
-            totalDuration += duration;
-            totalWeightedProgress += calculateTaskProgress(task) * duration;
-        });
-        const overallProgress = totalDuration > 0 ? Math.round(totalWeightedProgress / totalDuration) : 0;
+            const progress = calculateTaskProgress(task);
+            acc.totalDuration += duration;
+            acc.totalWeightedProgress += progress * duration;
+            return acc;
+        }, { totalDuration: 0, totalWeightedProgress: 0 });
+
+        const overallProgress = roadmapMetrics.totalDuration > 0
+            ? Math.round(roadmapMetrics.totalWeightedProgress / roadmapMetrics.totalDuration)
+            : 0;
 
         const projects = tasks.reduce((acc, task) => {
             const tag = task.projectTag || 'Geral';
@@ -512,27 +700,22 @@ const ExecutiveView = ({ tasks, okrs }) => {
             acc[tag].tasks.push(task);
             return acc;
         }, {});
-
-        const projectProgress = Object.keys(projects).map(tag => {
-            const projectData = projects[tag];
-            let projTotalWeightedProgress = 0;
-            let projTotalDuration = 0;
-            projectData.tasks.forEach(task => {
-                const duration = getTaskDurationInDays(task);
-                projTotalDuration += duration;
-                projTotalWeightedProgress += calculateTaskProgress(task) * duration;
-            });
-
-            return {
-                name: tag,
-                progress: projTotalDuration > 0 ? Math.round(projTotalWeightedProgress / projTotalDuration) : 0,
-            };
-        }).sort((a,b) => b.progress - a.progress);
+        
+        const statusSummary = Object.keys(projects).map(tag => {
+            const statusCounts = projects[tag].tasks.reduce((counts, task) => {
+                counts[task.status] = (counts[task.status] || 0) + 1;
+                return counts;
+            }, {});
+            return { name: tag, ...statusCounts };
+        });
 
         const okrsDetails = okrs.map(okr => ({
             ...okr,
             progress: calculateOkrProgress(okr)
         })).sort((a,b) => a.progress - b.progress);
+        
+        const totalOkrProgress = okrsDetails.reduce((sum, okr) => sum + okr.progress, 0);
+        const avgOkrProgress = okrs.length > 0 ? Math.round(totalOkrProgress / okrs.length) : 0;
 
         const attention = [];
         const next = [];
@@ -542,8 +725,8 @@ const ExecutiveView = ({ tasks, okrs }) => {
             if (task.priority === 'Alta' && isOverdue) {
                 attention.push({ type: 'Atraso Crítico', text: task.title, date: task.endDate });
             }
-            if (task.priority === 'Alta' && task.status === 'A Fazer') {
-                next.push({ type: 'Foco Imediato', text: task.title, date: task.startDate });
+            if (task.status === 'A Fazer' && task.priority === nextStepsPriority) {
+                next.push({ type: `Foco ${nextStepsPriority}`, text: task.title, date: task.startDate });
             }
         });
         
@@ -551,7 +734,7 @@ const ExecutiveView = ({ tasks, okrs }) => {
             (okr.keyResults || []).forEach(kr => {
                 (kr.attentionLog || []).forEach(log => {
                     if (!log.resolved) {
-                        attention.push({ type: 'KR Sinalizado', text: kr.text, parentObjective: okr.objective, justification: log.text });
+                        attention.push({ type: 'KR Sinalizado', text: kr.text, parentObjective: okr.objective, justification: log.text, krId: kr.id, okrId: okr.id, logId: log.id });
                     }
                 });
             });
@@ -559,15 +742,69 @@ const ExecutiveView = ({ tasks, okrs }) => {
 
         return {
             overallRoadmapProgress: overallProgress,
-            roadmapByProject: projectProgress,
+            overallOkrProgress: avgOkrProgress,
+            projectStatusSummary: statusSummary,
             okrsWithProgress: okrsDetails,
             attentionPoints: attention.slice(0, 5),
             nextSteps: next.sort((a,b) => new Date(a.date) - new Date(b.date)).slice(0, 5)
         };
-    }, [tasks, okrs]);
+    }, [tasks, okrs, nextStepsPriority]);
+
+    const handleResolveAttention = (okrId, krId, logId) => {
+        const targetOkr = okrs.find(o => o.id === okrId);
+        if (!targetOkr) return;
+
+        const updatedKeyResults = targetOkr.keyResults.map(kr => {
+            if (kr.id === krId) {
+                const updatedLog = (kr.attentionLog || []).map(log => {
+                    if (log.id === logId) {
+                        return { ...log, resolved: true };
+                    }
+                    return log;
+                });
+                return { ...kr, attentionLog: updatedLog };
+            }
+            return kr;
+        });
+        onSaveOkr({ ...targetOkr, keyResults: updatedKeyResults });
+    };
 
     const handleExportPDF = () => {
-        // Lógica de exportação
+        const jsPDF = window.jspdf?.jsPDF;
+        const input = executiveViewRef.current;
+        if (!input || !window.html2canvas || !jsPDF) {
+            alert("Erro: Biblioteca de exportação não encontrada. Verifique se os scripts foram adicionados ao seu HTML.");
+            return;
+        }
+        setIsExporting(true);
+        input.classList.add('printing');
+
+        html2canvas(input, { scale: 2, useCORS: true, logging: false })
+            .then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                const canvasWidth = canvas.width;
+                const canvasHeight = canvas.height;
+                const ratio = canvasWidth / canvasHeight;
+                let width = pdfWidth;
+                let height = width / ratio;
+
+                if (height > pdfHeight) {
+                    height = pdfHeight;
+                    width = height * ratio;
+                }
+                const x = (pdfWidth - width) / 2;
+                
+                pdf.addImage(imgData, 'PNG', x, 0, width, height);
+                pdf.save(`relatorio-executivo-${formatDate(new Date(), false)}.pdf`);
+            })
+            .catch(err => console.error("Erro ao exportar PDF:", err))
+            .finally(() => {
+                input.classList.remove('printing');
+                setIsExporting(false);
+            });
     };
     
     const getStatusColor = (progress) => {
@@ -586,6 +823,13 @@ const ExecutiveView = ({ tasks, okrs }) => {
         </div>
     );
 
+    const totalStatusSummary = projectStatusSummary.reduce((acc, curr) => {
+        Object.keys(STATUSES).forEach(status => {
+            acc[status] = (acc[status] || 0) + (curr[status] || 0);
+        });
+        return acc;
+    }, {});
+
     return (
         <div className="space-y-6" ref={executiveViewRef}>
             <Card>
@@ -601,72 +845,104 @@ const ExecutiveView = ({ tasks, okrs }) => {
                 </div>
             </Card>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard icon={<TrendingUpIcon size={24} className="text-green-800" />} label="Progresso Geral do Roadmap" value={`${overallRoadmapProgress}%`} colorClass="bg-green-200" />
-                <StatCard icon={<Target size={24} className="text-indigo-800" />} label="Objetivos (OKRs)" value={okrs.length} colorClass="bg-indigo-200" />
-                <StatCard icon={<AlertTriangle size={24} className="text-yellow-800" />} label="Pontos de Atenção" value={attentionPoints.length} colorClass="bg-yellow-200" />
-                <StatCard icon={<Clock size={24} className="text-blue-800" />} label="Próximos Passos" value={nextSteps.length} colorClass="bg-blue-200" />
+            <div className="space-y-2">
+                <h3 className="text-lg font-semibold text-gray-500 uppercase tracking-wider">Painel de Indicadores-Chave</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <StatCard icon={<TrendingUpIcon size={24} className="text-green-800" />} label="Progresso Geral do Roadmap" value={`${overallRoadmapProgress}%`} colorClass="bg-green-200" />
+                    <StatCard icon={<Target size={24} className="text-indigo-800" />} label="Progresso Geral dos OKRs" value={`${overallOkrProgress}%`} colorClass="bg-indigo-200" />
+                    <StatCard icon={<AlertTriangle size={24} className="text-yellow-800" />} label="Pontos de Atenção" value={attentionPoints.length} colorClass="bg-yellow-200" />
+                    <StatCard icon={<Clock size={24} className="text-blue-800" />} label="Próximos Passos" value={nextSteps.length} colorClass="bg-blue-200" />
+                </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card>
-                    <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center"><Layers className="mr-2 text-gray-500" />Progresso do Roadmap por Projeto</h3>
-                    <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                        {roadmapByProject.length > 0 ? roadmapByProject.map(proj => (
-                            <div key={proj.name}>
-                                <div className="flex justify-between items-center mb-1">
-                                    <p className="font-semibold text-gray-700 truncate pr-4">{proj.name}</p>
-                                    <span className="font-bold text-gray-800">{proj.progress}%</span>
-                                </div>
-                                <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                    <div className={`${getStatusColor(proj.progress)} h-2.5 rounded-full`} style={{ width: `${proj.progress}%` }}></div>
-                                </div>
-                            </div>
-                        )) : <p className="text-gray-500">Nenhum projeto no roadmap.</p>}
-                    </div>
-                </Card>
-                <Card>
-                    <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center"><Target className="mr-2 text-gray-500" />Progresso dos Objetivos (OKRs)</h3>
-                    <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                        {okrsWithProgress.length > 0 ? okrsWithProgress.map(okr => (
-                            <div key={okr.id}>
-                                <div className="flex justify-between items-center mb-1">
-                                    <p className="font-semibold text-gray-700 truncate pr-4">{okr.objective}</p>
-                                    <span className="font-bold text-gray-800">{okr.progress}%</span>
-                                </div>
-                                <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                    <div className={`${getStatusColor(okr.progress)} h-2.5 rounded-full`} style={{ width: `${okr.progress}%` }}></div>
+            <div className="space-y-2">
+                <h3 className="text-lg font-semibold text-gray-500 uppercase tracking-wider">Análise Detalhada</h3>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <Card className="lg:col-span-1">
+                        <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center"><Layers className="mr-2 text-gray-500" />Status por Projeto</h3>
+                        <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                             <div className="p-2 bg-gray-100 rounded-lg">
+                                <p className="font-semibold text-gray-800 truncate pr-4 mb-2">Total Geral</p>
+                                <div className="flex justify-around text-center text-xs">
+                                    {Object.keys(STATUSES).map(s => (
+                                        <div key={s}>
+                                            <p className="font-bold text-lg">{totalStatusSummary[s] || 0}</p>
+                                            <p className="text-gray-500">{s}</p>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
-                        )) : <p className="text-gray-500">Nenhum OKR definido.</p>}
-                    </div>
-                </Card>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                 <Card>
-                    <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center"><AlertTriangle className="mr-2 text-red-500" />Pontos de Atenção</h3>
-                    <div className="space-y-3">
-                        {attentionPoints.length > 0 ? attentionPoints.map((item, index) => (
-                            <div key={index} className="p-3 bg-red-50 border-l-4 border-red-500 rounded">
-                                <p className="font-semibold text-red-800">{item.type}: <span className="font-normal">{item.text}</span></p>
-                                {item.date && <p className="text-sm text-red-600">Prazo era {formatDate(item.date, false)}</p>}
-                                {item.parentObjective && <p className="text-sm text-red-600">Do Objetivo: {item.parentObjective}</p>}
-                                {item.justification && <p className="text-sm text-red-600 mt-1 italic">"{item.justification}"</p>}
+                            {projectStatusSummary.map(proj => (
+                                <div key={proj.name}>
+                                    <p className="font-semibold text-gray-700 truncate pr-4 mb-2">{proj.name}</p>
+                                    <div className="flex justify-around text-center text-xs">
+                                        {Object.keys(STATUSES).map(s => (
+                                            <div key={s}>
+                                                <p className="font-bold text-lg">{proj[s] || 0}</p>
+                                                <p className="text-gray-500">{s}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </Card>
+                    <Card className="lg:col-span-1">
+                        <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center"><Target className="mr-2 text-gray-500" />Progresso dos Objetivos</h3>
+                        <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                            {okrsWithProgress.length > 0 ? okrsWithProgress.map(okr => (
+                                <div key={okr.id}>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <p className="font-semibold text-gray-700 truncate pr-4">{okr.objective}</p>
+                                        <span className="font-bold text-gray-800">{okr.progress}%</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-2.5">
+                                        <div className={`${getStatusColor(okr.progress)} h-2.5 rounded-full`} style={{ width: `${okr.progress}%` }}></div>
+                                    </div>
+                                </div>
+                            )) : <p className="text-gray-500">Nenhum OKR definido.</p>}
+                        </div>
+                    </Card>
+                    <Card className="lg:col-span-1">
+                        <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center"><AlertTriangle className="mr-2 text-red-500" />Inteligência</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <h4 className="font-semibold text-gray-700 mb-2">Pontos de Atenção</h4>
+                                 <div className="space-y-3">
+                                    {attentionPoints.length > 0 ? attentionPoints.map((item, index) => (
+                                        <div key={index} className="p-3 bg-red-50 border-l-4 border-red-500 rounded flex justify-between items-start">
+                                            <div>
+                                                <p className="font-semibold text-red-800">{item.type}: <span className="font-normal">{item.text}</span></p>
+                                                {item.justification && <p className="text-sm text-red-600 mt-1 italic">"{item.justification}"</p>}
+                                            </div>
+                                            {item.logId && (
+                                                <button onClick={() => handleResolveAttention(item.okrId, item.krId, item.logId)} className="ml-2 p-1 text-green-600 hover:bg-green-100 rounded-full"><Check size={18} /></button>
+                                            )}
+                                        </div>
+                                    )) : <p className="text-gray-500 text-sm">Nenhum ponto de atenção identificado.</p>}
+                                </div>
                             </div>
-                        )) : <p className="text-gray-500">Nenhum ponto de atenção identificado.</p>}
-                    </div>
-                </Card>
-                <Card>
-                    <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center"><Clock className="mr-2 text-gray-500" />Próximos Passos</h3>
-                    <div className="space-y-3">
-                        {nextSteps.length > 0 ? nextSteps.map((item, index) => (
-                            <div key={index} className="p-3 bg-blue-50 border-l-4 border-blue-500 rounded">
-                                <p className="font-semibold text-blue-800">{item.type}: <span className="font-normal">{item.text}</span></p>
-                                <p className="text-sm text-blue-600">Inicia em: {formatDate(item.date, false)}</p>
+                             <div>
+                                <div className="flex justify-between items-center mb-2">
+                                    <h4 className="font-semibold text-gray-700">Próximos Passos</h4>
+                                    <div className="flex gap-1">
+                                        {Object.keys(PRIORITIES).map(p => (
+                                            <button key={p} onClick={() => setNextStepsPriority(p)} className={`px-2 py-0.5 text-xs rounded-full ${nextStepsPriority === p ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>{p}</button>
+                                        ))}
+                                    </div>
+                                </div>
+                                 <div className="space-y-3">
+                                    {nextSteps.length > 0 ? nextSteps.map((item, index) => (
+                                        <div key={index} className="p-3 bg-blue-50 border-l-4 border-blue-500 rounded">
+                                            <p className="font-semibold text-blue-800">{item.type}: <span className="font-normal">{item.text}</span></p>
+                                            <p className="text-sm text-blue-600">Inicia em: {formatDate(item.date, false)}</p>
+                                        </div>
+                                    )) : <p className="text-gray-500 text-sm">Nenhuma ação com prioridade "{nextStepsPriority}" a ser iniciada.</p>}
+                                </div>
                             </div>
-                        )) : <p className="text-gray-500">Nenhuma ação de alta prioridade a ser iniciada.</p>}
-                    </div>
-                </Card>
+                        </div>
+                    </Card>
+                </div>
             </div>
         </div>
     );
@@ -678,6 +954,7 @@ const ExecutiveView = ({ tasks, okrs }) => {
 const OkrForm = ({ okr, onSave, onCancel }) => {
     const [objective, setObjective] = useState(okr?.objective || '');
     const [keyResults, setKeyResults] = useState(okr?.keyResults || []);
+    const [targetDate, setTargetDate] = useState(okr?.targetDate || '');
 
     const handleKrChange = (index, field, value) => {
         const newKrs = [...keyResults];
@@ -692,16 +969,22 @@ const OkrForm = ({ okr, onSave, onCancel }) => {
     const handleFormSave = () => {
         if (!objective.trim()) return;
         const finalKrs = keyResults.filter(kr => kr.text.trim() !== '');
-        onSave({ id: okr?.id, objective, keyResults: finalKrs });
+        onSave({ id: okr?.id, objective, keyResults: finalKrs, targetDate, startDate: okr?.startDate || new Date().toISOString().split('T')[0] });
     };
 
     return (
         <Card className="border-indigo-300 border-2 mt-6">
             <h3 className="text-xl font-bold text-gray-800 mb-4">{okr ? 'Editar Objetivo' : 'Novo Objetivo'}</h3>
             <div className="space-y-6">
-                <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">Objetivo</label>
-                    <input type="text" value={objective} onChange={e => setObjective(e.target.value)} placeholder="Ex: Lançar o melhor produto do mercado" className="w-full p-2 bg-white border border-gray-300 rounded-md text-gray-800" />
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Objetivo</label>
+                        <input type="text" value={objective} onChange={e => setObjective(e.target.value)} placeholder="Ex: Lançar o melhor produto do mercado" className="w-full p-2 bg-white border border-gray-300 rounded-md text-gray-800" />
+                    </div>
+                     <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Data Alvo</label>
+                        <input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} className="w-full p-2 bg-white border border-gray-300 rounded-md text-gray-800" />
+                    </div>
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-600 mb-2">Resultados-Chave</label>
@@ -1018,7 +1301,7 @@ export default function App() {
     const [view, setView] = useState('workspace');
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState(null);
-    const [filters, setFilters] = useState({ priority: 'Todos', status: 'Todos' });
+    const [filters, setFilters] = useState({ priority: 'Todos', status: 'Todos', labels: [] });
     const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
     const [itemToDelete, setItemToDelete] = useState(null);
     const [zoomLevel, setZoomLevel] = useState(5);
@@ -1105,10 +1388,12 @@ export default function App() {
     };
 
     const filteredTasks = useMemo(() => {
-        let sortedTasks = tasks.sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
-        if (filters.priority !== 'Todos') sortedTasks = sortedTasks.filter(task => task.priority === filters.priority);
-        if (filters.status !== 'Todos') sortedTasks = sortedTasks.filter(task => task.status === filters.status);
-        return sortedTasks;
+        return tasks.filter(task => {
+            const statusMatch = filters.status === 'Todos' || task.status === filters.status;
+            const priorityMatch = filters.priority === 'Todos' || task.priority === filters.priority;
+            const labelMatch = filters.labels.length === 0 || (task.labels && task.labels.some(l => filters.labels.includes(l)));
+            return statusMatch && priorityMatch && labelMatch;
+        }).sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
     }, [tasks, filters]);
 
     return (
@@ -1149,7 +1434,7 @@ export default function App() {
                             onDelete={requestDelete}
                         />
                     )}
-                    {view === 'executive' && <ExecutiveView tasks={tasks} okrs={okrs} />}
+                    {view === 'executive' && <ExecutiveView tasks={tasks} okrs={okrs} onSaveOkr={handleSaveOkr} />}
                 </main>
                 <TaskModal
                     isOpen={isTaskModalOpen}
