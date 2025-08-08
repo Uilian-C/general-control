@@ -40,7 +40,15 @@ const TASK_COLORS = ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#c084fc', '#f4
 const formatDate = (dateInput) => {
   if (!dateInput) return '';
   const date = dateInput.toDate ? dateInput.toDate() : new Date(dateInput);
-  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(date);
+  // Formatando para incluir data e hora
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'UTC'
+  }).format(date);
 };
 
 const getDaysInView = (startDate, endDate) => {
@@ -514,9 +522,45 @@ const OkrForm = ({ okr, onSave, onCancel }) => {
     );
 };
 
-const KrItem = ({ kr, onUpdate }) => {
+const KrHistoryModal = ({ isOpen, onClose, kr, onDeleteUpdate }) => {
+    if (!isOpen) return null;
+
+    const sortedUpdates = kr.updates ? [...kr.updates].sort((a, b) => new Date(b.date) - new Date(a.date)) : [];
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={`Histórico de Progresso`} size="2xl">
+            <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-gray-800">{kr.text}</h3>
+                {sortedUpdates.length > 0 ? (
+                    <ul className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                        {sortedUpdates.map((update) => (
+                            <li key={update.date} className="flex items-center justify-between p-3 bg-gray-100 rounded-lg">
+                                <div>
+                                    <span className="font-semibold text-indigo-700">Valor: {update.value}</span>
+                                    <p className="text-sm text-gray-500">Registrado em: {formatDate(new Date(update.date))}</p>
+                                </div>
+                                <Button onClick={() => onDeleteUpdate(kr.id, update.date)} variant="ghost" className="!p-2 text-red-500 hover:bg-red-100">
+                                    <Trash2 size={16} />
+                                </Button>
+                            </li>
+                        ))}
+                    </ul>
+                ) : (
+                    <p className="text-gray-500">Nenhum registro de progresso ainda.</p>
+                )}
+                <div className="flex justify-end pt-4 border-t">
+                    <Button onClick={onClose} variant="secondary">Fechar</Button>
+                </div>
+            </div>
+        </Modal>
+    );
+};
+
+
+const KrItem = ({ kr, onUpdate, onDeleteUpdate }) => {
     const [isUpdating, setIsUpdating] = useState(false);
     const [newValue, setNewValue] = useState(kr.currentValue);
+    const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const progress = calculateKrProgress(kr);
 
     const handleUpdate = () => {
@@ -525,40 +569,43 @@ const KrItem = ({ kr, onUpdate }) => {
     };
 
     return (
-        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-gray-300 transition-all">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                <p className="font-medium text-gray-800 flex-1">{kr.text}</p>
-                <div className="flex items-center gap-4 mt-2 sm:mt-0">
-                    <span className="text-xs text-gray-500">Peso: {kr.weight || 1}</span>
-                    <div className="flex items-center gap-2">
-                        {isUpdating ? (
-                            <>
-                                <input
-                                    type="number"
-                                    value={newValue}
-                                    onChange={e => setNewValue(parseFloat(e.target.value))}
-                                    className="w-24 p-1 border border-indigo-400 rounded-md"
-                                    autoFocus
-                                />
-                                <Button onClick={handleUpdate} variant="primary" className="!px-2 !py-1"><Check size={16} /></Button>
-                                <Button onClick={() => setIsUpdating(false)} variant="secondary" className="!px-2 !py-1"><X size={16} /></Button>
-                            </>
-                        ) : (
-                            <>
-                                <span className="font-semibold text-indigo-600 text-sm">{kr.currentValue}</span>
-                                <span className="text-gray-500 text-sm">/ {kr.targetValue}</span>
-                                <Button onClick={() => setIsUpdating(true)} variant="ghost" className="!p-1 h-7 w-7"><Zap size={16} /></Button>
-                            </>
-                        )}
+        <>
+            <KrHistoryModal
+                isOpen={isHistoryOpen}
+                onClose={() => setIsHistoryOpen(false)}
+                kr={kr}
+                onDeleteUpdate={onDeleteUpdate}
+            />
+            <div className="p-4 bg-white rounded-lg border border-gray-200 hover:border-gray-300 transition-all">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                    <p className="font-medium text-gray-800 flex-1">{kr.text}</p>
+                    <div className="flex items-center gap-4 mt-2 sm:mt-0">
+                        <span className="text-xs text-gray-500">Peso: {kr.weight || 1}</span>
+                        <div className="flex items-center gap-2">
+                            {isUpdating ? (
+                                <>
+                                    <input type="number" value={newValue} onChange={e => setNewValue(parseFloat(e.target.value))} className="w-24 p-1 border border-indigo-400 rounded-md" autoFocus />
+                                    <Button onClick={handleUpdate} variant="primary" className="!px-2 !py-1"><Check size={16} /></Button>
+                                    <Button onClick={() => setIsUpdating(false)} variant="secondary" className="!px-2 !py-1"><X size={16} /></Button>
+                                </>
+                            ) : (
+                                <>
+                                    <span className="font-semibold text-indigo-600 text-sm">{kr.currentValue}</span>
+                                    <span className="text-gray-500 text-sm">/ {kr.targetValue}</span>
+                                    <Button onClick={() => setIsUpdating(true)} variant="ghost" className="!p-1 h-7 w-7"><Zap size={16} /></Button>
+                                    <Button onClick={() => setIsHistoryOpen(true)} variant="ghost" className="!p-1 h-7 w-7"><History size={16} /></Button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+                <div className="mt-2">
+                    <div className="w-full bg-gray-200 rounded-full h-2.5">
+                        <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div>
                     </div>
                 </div>
             </div>
-            <div className="mt-2">
-                <div className="w-full bg-gray-200 rounded-full h-2.5">
-                    <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div>
-                </div>
-            </div>
-        </div>
+        </>
     );
 }
 
@@ -566,12 +613,11 @@ const OkrView = ({ okrs, onSave, onDelete }) => {
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingOkr, setEditingOkr] = useState(null);
     const [expandedOkrs, setExpandedOkrs] = useState({});
+    const [itemToDelete, setItemToDelete] = useState(null);
+    const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
 
     const toggleExpansion = (okrId) => {
-        setExpandedOkrs(prev => ({
-            ...prev,
-            [okrId]: !prev[okrId]
-        }));
+        setExpandedOkrs(prev => ({ ...prev, [okrId]: !prev[okrId] }));
     };
 
     const handleSave = (okrData) => {
@@ -583,13 +629,32 @@ const OkrView = ({ okrs, onSave, onDelete }) => {
     const handleKrUpdate = (okr, krId, newValue) => {
         const updatedKeyResults = okr.keyResults.map(kr => {
             if (kr.id === krId) {
-                const newUpdate = { value: newValue, date: new Date().toISOString() };
-                return { ...kr, currentValue: newValue, updates: [...(kr.updates || []), newUpdate] };
+                const newUpdate = {
+                    id: `update_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                    value: newValue,
+                    date: new Date().toISOString()
+                };
+                const newUpdates = [...(kr.updates || []), newUpdate];
+                return { ...kr, currentValue: newValue, updates: newUpdates };
             }
             return kr;
         });
         onSave({ ...okr, keyResults: updatedKeyResults });
     };
+    
+    const handleDeleteUpdate = (okr, krId, updateDate) => {
+        const updatedKeyResults = okr.keyResults.map(kr => {
+            if (kr.id === krId) {
+                const newUpdates = kr.updates.filter(u => u.date !== updateDate);
+                const sortedUpdates = newUpdates.sort((a,b) => new Date(a.date) - new Date(b.date));
+                const newCurrentValue = sortedUpdates.length > 0 ? sortedUpdates[sortedUpdates.length - 1].value : kr.startValue;
+                return { ...kr, updates: newUpdates, currentValue: newCurrentValue };
+            }
+            return kr;
+        });
+        onSave({ ...okr, keyResults: updatedKeyResults });
+    };
+
 
     const handleEdit = (okr) => {
         setEditingOkr(okr);
@@ -601,60 +666,87 @@ const OkrView = ({ okrs, onSave, onDelete }) => {
         setEditingOkr(null);
     };
 
-    return (
-        <div className="space-y-6">
-            <Card>
-                <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-                    <div>
-                        <h2 className="text-3xl font-bold text-gray-800 flex items-center"><Target className="mr-3 text-indigo-600" />Objetivos e Resultados-Chave</h2>
-                        <p className="text-gray-600 mt-1">Defina e acompanhe as metas que impulsionam seu roadmap.</p>
-                    </div>
-                    {!isFormOpen && (
-                        <Button onClick={() => setIsFormOpen(true)} variant="primary">
-                            <Plus size={16} /> Novo Objetivo
-                        </Button>
-                    )}
-                </div>
-            </Card>
+    const requestDeleteOkr = (id) => {
+        setItemToDelete({ id, type: 'okr' });
+        setIsConfirmDeleteOpen(true);
+    }
+    
+    const confirmDeleteOkr = () => {
+        onDelete(itemToDelete.id, itemToDelete.type);
+        setIsConfirmDeleteOpen(false);
+        setItemToDelete(null);
+    }
 
-            {isFormOpen && <OkrForm key={editingOkr?.id || 'new'} okr={editingOkr} onSave={handleSave} onCancel={handleCancel} />}
+    return (
+        <>
+            <ConfirmModal
+                isOpen={isConfirmDeleteOpen}
+                onClose={() => setIsConfirmDeleteOpen(false)}
+                onConfirm={confirmDeleteOkr}
+                title="Confirmar Exclusão de Objetivo"
+            >
+                <p>Tem certeza que deseja excluir este Objetivo e todos os seus KRs? Esta ação não pode ser desfeita.</p>
+            </ConfirmModal>
 
             <div className="space-y-6">
-                {okrs.map(okr => {
-                    const progress = calculateOkrProgress(okr);
-                    const isExpanded = !!expandedOkrs[okr.id];
-                    return (
-                        <Card key={okr.id} className="transition-all duration-300 overflow-hidden !p-0">
-                            <div className="p-6">
-                                <div className="flex justify-between items-start">
-                                    <h3 className="text-xl font-bold text-gray-800 flex-1 pr-4">{okr.objective}</h3>
-                                    <div className="flex space-x-2">
-                                        <Button onClick={() => handleEdit(okr)} variant="ghost" className="!p-2"><Edit size={16} /></Button>
-                                        <Button onClick={() => onDelete(okr.id, 'okr')} variant="ghost" className="!p-2 text-red-500 hover:bg-red-50"><Trash2 size={16} /></Button>
+                <Card>
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                        <div>
+                            <h2 className="text-3xl font-bold text-gray-800 flex items-center"><Target className="mr-3 text-indigo-600" />Objetivos e Resultados-Chave</h2>
+                            <p className="text-gray-600 mt-1">Defina e acompanhe as metas que impulsionam seu roadmap.</p>
+                        </div>
+                        {!isFormOpen && (
+                            <Button onClick={() => setIsFormOpen(true)} variant="primary">
+                                <Plus size={16} /> Novo Objetivo
+                            </Button>
+                        )}
+                    </div>
+                </Card>
+
+                {isFormOpen && <OkrForm key={editingOkr?.id || 'new'} okr={editingOkr} onSave={handleSave} onCancel={handleCancel} />}
+
+                <div className="space-y-6">
+                    {okrs.map(okr => {
+                        const progress = calculateOkrProgress(okr);
+                        const isExpanded = !!expandedOkrs[okr.id];
+                        return (
+                            <Card key={okr.id} className="transition-all duration-300 overflow-hidden !p-0">
+                                <div className="p-6">
+                                    <div className="flex justify-between items-start">
+                                        <h3 className="text-xl font-bold text-gray-800 flex-1 pr-4">{okr.objective}</h3>
+                                        <div className="flex space-x-2">
+                                            <Button onClick={() => handleEdit(okr)} variant="ghost" className="!p-2"><Edit size={16} /></Button>
+                                            <Button onClick={() => requestDeleteOkr(okr.id)} variant="ghost" className="!p-2 text-red-500 hover:bg-red-50"><Trash2 size={16} /></Button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="mt-3 flex items-center gap-4 cursor-pointer" onClick={() => toggleExpansion(okr.id)}>
+                                        <div className="w-full bg-gray-200 rounded-full h-4">
+                                            <div className="bg-gradient-to-r from-sky-500 to-indigo-600 h-4 rounded-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
+                                        </div>
+                                        <span className="text-lg font-bold text-indigo-600">{progress}%</span>
+                                        <ChevronDown size={20} className={`text-gray-500 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
                                     </div>
                                 </div>
                                 
-                                <div className="mt-3 flex items-center gap-4 cursor-pointer" onClick={() => toggleExpansion(okr.id)}>
-                                    <div className="w-full bg-gray-200 rounded-full h-4">
-                                        <div className="bg-gradient-to-r from-sky-500 to-indigo-600 h-4 rounded-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
+                                <div className={`transition-all duration-500 ease-in-out bg-gray-50/50 ${isExpanded ? 'max-h-[1000px] py-4' : 'max-h-0'}`}>
+                                    <div className="px-6 space-y-3">
+                                        {okr.keyResults.map(kr => (
+                                            <KrItem 
+                                                key={kr.id} 
+                                                kr={kr} 
+                                                onUpdate={(krId, newValue) => handleKrUpdate(okr, krId, newValue)}
+                                                onDeleteUpdate={(krId, updateDate) => handleDeleteUpdate(okr, krId, updateDate)}
+                                            />
+                                        ))}
                                     </div>
-                                    <span className="text-lg font-bold text-indigo-600">{progress}%</span>
-                                    <ChevronDown size={20} className={`text-gray-500 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
                                 </div>
-                            </div>
-                            
-                            <div className={`transition-all duration-500 ease-in-out bg-gray-50/50 ${isExpanded ? 'max-h-[1000px] py-4' : 'max-h-0'}`}>
-                                <div className="px-6 space-y-3">
-                                    {okr.keyResults.map(kr => (
-                                        <KrItem key={kr.id} kr={kr} onUpdate={(krId, newValue) => handleKrUpdate(okr, krId, newValue)} />
-                                    ))}
-                                </div>
-                            </div>
-                        </Card>
-                    )
-                })}
+                            </Card>
+                        )
+                    })}
+                </div>
             </div>
-        </div>
+        </>
     );
 };
 
@@ -706,7 +798,17 @@ export default function App() {
         }, (err) => { console.error("Error fetching tasks:", err); setError("Falha ao carregar tarefas."); });
 
         const unsubscribeOkrs = onSnapshot(query(collection(db, okrsCollectionPath)), (snapshot) => {
-            setOkrs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            const okrData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            okrData.forEach(okr => {
+                if (okr.keyResults) {
+                    okr.keyResults.forEach(kr => {
+                        if (kr.updates) {
+                            kr.updates.sort((a, b) => new Date(a.date) - new Date(b.date));
+                        }
+                    });
+                }
+            });
+            setOkrs(okrData);
         }, (err) => { console.error("Error fetching OKRs:", err); setError("Falha ao carregar OKRs."); });
 
         return () => { unsubscribeTasks(); unsubscribeOkrs(); };
