@@ -6,8 +6,8 @@ import { Target, Flag, Plus, Trash2, X, Layers, Briefcase, Edit, Settings, Tag, 
 
 // --- ATENÇÃO: Para a funcionalidade de exportar PDF funcionar ---
 // Adicione estas duas linhas no <head> do seu arquivo HTML principal (ex: index.html)
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+// <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+// <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 // --- Configuração do Firebase ---
 const firebaseConfig = {
