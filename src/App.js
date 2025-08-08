@@ -169,6 +169,7 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
     const [currentTask, setCurrentTask] = useState({});
     const [newProject, setNewProject] = useState('');
     const [isCreatingProject, setIsCreatingProject] = useState(false);
+    const [expandedBlocker, setExpandedBlocker] = useState(null);
     
     const displayProjectList = useMemo(() => {
         const projects = new Set(tasks.map(t => t.projectTag).filter(Boolean));
@@ -249,27 +250,33 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
         }
     };
     
-    const handleBlockerToggle = () => {
-        const isActiveBlocker = (currentTask.blockerLog || []).some(b => !b.unblockDate);
-        if (isActiveBlocker) { // Unblocking
-            const newLog = (currentTask.blockerLog || []).map(b => 
-                !b.unblockDate ? { ...b, unblockDate: new Date().toISOString() } : b
-            );
-            setCurrentTask(prev => ({ ...prev, blockerLog: newLog, status: 'A Fazer' }));
-        } else { // Blocking
-            const newLog = [...(currentTask.blockerLog || []), {
-                id: `block_${Date.now()}`,
-                blockDate: new Date().toISOString(),
-                blockReason: '',
-                unblockDate: null
-            }];
-            setCurrentTask(prev => ({ ...prev, blockerLog: newLog, status: 'Bloqueado' }));
-        }
+    const addBlocker = () => {
+        const newLog = [...(currentTask.blockerLog || []), {
+            id: `block_${Date.now()}`,
+            blockDate: new Date().toISOString().split('T')[0],
+            blockReason: '',
+            unblockDate: null,
+            unblockReason: ''
+        }];
+        setCurrentTask(prev => ({ ...prev, blockerLog: newLog, status: 'Bloqueado' }));
     };
-
+    
     const handleBlockerLogChange = (logId, field, value) => {
-        const newLog = (currentTask.blockerLog || []).map(b => b.id === logId ? { ...b, [field]: value } : b);
+        const newLog = (currentTask.blockerLog || []).map(b => {
+            if (b.id === logId) {
+                return { ...b, [field]: value };
+            }
+            return b;
+        });
         setCurrentTask(prev => ({ ...prev, blockerLog: newLog }));
+    };
+    
+    const handleUnblock = (logId) => {
+        const newLog = (currentTask.blockerLog || []).map(b => 
+            b.id === logId ? { ...b, unblockDate: new Date().toISOString().split('T')[0] } : b
+        );
+        const isStillBlocked = newLog.some(b => !b.unblockDate);
+        setCurrentTask(prev => ({ ...prev, blockerLog: newLog, status: isStillBlocked ? 'Bloqueado' : 'A Fazer' }));
     };
     
     const handleSubtaskChange = (index, field, value) => {
@@ -299,8 +306,6 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
 
     if (!isOpen) return null;
     
-    const activeBlocker = (currentTask.blockerLog || []).find(b => !b.unblockDate);
-
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={task?.humanId ? `Editar Tarefa [${task.humanId}]` : "Nova Tarefa"} size="4xl">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -322,12 +327,42 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
                         </div>
                          <Button onClick={addSubtask} variant="secondary" className="mt-2 text-sm">Adicionar Subtarefa</Button>
                     </div>
+                    
+                    <div>
+                        <h3 className="font-semibold mb-2">Histórico de Bloqueios</h3>
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                            {(currentTask.blockerLog || []).map(log => (
+                                <div key={log.id} className="p-3 bg-gray-50 rounded-md border border-gray-200 cursor-pointer" onClick={() => setExpandedBlocker(expandedBlocker === log.id ? null : log.id)}>
+                                    <div className="flex justify-between items-center">
+                                        <p className={`font-semibold ${log.unblockDate ? 'text-green-600' : 'text-red-600'}`}>{log.unblockDate ? 'Desbloqueado' : 'Bloqueado'} em {formatDate(log.blockDate, false)}</p>
+                                        <ChevronDown size={16} className={`transition-transform ${expandedBlocker === log.id ? 'rotate-180' : ''}`} />
+                                    </div>
+                                    {expandedBlocker === log.id && (
+                                        <div className="mt-2 space-y-2">
+                                            <div>
+                                                <label className="text-xs font-medium text-gray-500">Motivo do Bloqueio</label>
+                                                <textarea value={log.blockReason} onChange={e => handleBlockerLogChange(log.id, 'blockReason', e.target.value)} className="w-full p-1 border rounded-md text-sm h-16"></textarea>
+                                            </div>
+                                            {!log.unblockDate ? (
+                                                <Button onClick={() => handleUnblock(log.id)} variant="secondary" className="!text-xs !py-1 w-full">Registrar Desbloqueio</Button>
+                                            ) : (
+                                                <div>
+                                                     <label className="text-xs font-medium text-gray-500">Data do Desbloqueio: {formatDate(log.unblockDate, false)}</label>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                        <Button onClick={addBlocker} variant="secondary" className="mt-2 text-sm">Adicionar Bloqueio</Button>
+                    </div>
                 </div>
 
                 <div className="md:col-span-1 space-y-4 bg-gray-50 p-4 rounded-lg">
                     <div className="space-y-1">
                         <label className="block text-sm font-medium text-gray-600">Status</label>
-                        <select name="status" value={currentTask.status || 'A Fazer'} onChange={handleChange} disabled={!!activeBlocker} className="w-full p-2 border border-gray-300 rounded-md">
+                        <select name="status" value={currentTask.status || 'A Fazer'} onChange={handleChange} disabled={(currentTask.blockerLog || []).some(b => !b.unblockDate)} className="w-full p-2 border border-gray-300 rounded-md">
                             {Object.keys(STATUSES).map(s => <option key={s} value={s}>{STATUSES[s].label}</option>)}
                         </select>
                     </div>
@@ -389,32 +424,6 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
                                 </button>
                             ))}
                         </div>
-                    </div>
-                    <div className="space-y-1">
-                        <div className="flex items-center justify-between">
-                            <label className="block text-sm font-medium text-gray-600">Bloqueado</label>
-                            <button onClick={handleBlockerToggle} className={`p-2 rounded-full ${activeBlocker ? 'bg-red-500 text-white' : 'bg-gray-200'}`}>
-                                {activeBlocker ? <Unlock size={16} /> : <Lock size={16} />}
-                            </button>
-                        </div>
-                        {activeBlocker && (
-                            <div className="mt-2 space-y-2 p-2 bg-red-50 rounded-md border border-red-200">
-                                <label className="text-xs font-medium text-gray-500">Data do Bloqueio</label>
-                                <input 
-                                    type="date" 
-                                    value={activeBlocker.blockDate ? activeBlocker.blockDate.split('T')[0] : ''} 
-                                    onChange={e => handleBlockerLogChange(activeBlocker.id, 'blockDate', new Date(e.target.value).toISOString())} 
-                                    className="w-full p-2 border border-gray-300 rounded-md" 
-                                />
-                                <label className="text-xs font-medium text-gray-500">Motivo</label>
-                                <textarea 
-                                    value={activeBlocker.blockReason} 
-                                    onChange={e => handleBlockerLogChange(activeBlocker.id, 'blockReason', e.target.value)} 
-                                    placeholder="Motivo do bloqueio..." 
-                                    className="w-full p-2 border border-gray-300 rounded-md h-20">
-                                </textarea>
-                            </div>
-                        )}
                     </div>
                 </div>
                 <div className="md:col-span-3 flex justify-between items-center pt-6 border-t">
@@ -504,7 +513,7 @@ const Timeline = ({ tasks, onTaskClick, zoomLevel, viewStartDate }) => {
 
     const groupedTasks = useMemo(() => {
         return tasks.reduce((acc, task) => {
-            const group = task.projectTag || 'Geral';
+            const group = task.projectTag || 'Sem Projeto';
             if (!acc[group]) acc[group] = [];
             acc[group].push(task);
             return acc;
@@ -682,7 +691,6 @@ const WorkspaceView = ({ tasks, onTaskClick, filters, setFilters, zoomLevel, set
 
 const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
     const executiveViewRef = useRef(null);
-    const [isExporting, setIsExporting] = useState(false);
     const [nextStepsPriority, setNextStepsPriority] = useState('Alta');
 
     const {
@@ -708,7 +716,7 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
             : 0;
 
         const projects = tasks.reduce((acc, task) => {
-            const tag = task.projectTag || 'Geral';
+            const tag = task.projectTag || 'Sem Projeto';
             if (!acc[tag]) acc[tag] = { tasks: [] };
             acc[tag].tasks.push(task);
             return acc;
@@ -781,44 +789,6 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
         });
         onSaveOkr({ ...targetOkr, keyResults: updatedKeyResults });
     };
-
-    const handleExportPDF = () => {
-        const jsPDF = window.jspdf?.jsPDF;
-        const input = executiveViewRef.current;
-        if (!input || !window.html2canvas || !jsPDF) {
-            alert("Erro: Biblioteca de exportação não encontrada. Verifique se os scripts foram adicionados ao seu HTML.");
-            return;
-        }
-        setIsExporting(true);
-        input.classList.add('printing');
-
-        html2canvas(input, { scale: 2, useCORS: true, logging: false })
-            .then(canvas => {
-                const imgData = canvas.toDataURL('image/png');
-                const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
-                const pdfWidth = pdf.internal.pageSize.getWidth();
-                const pdfHeight = pdf.internal.pageSize.getHeight();
-                const canvasWidth = canvas.width;
-                const canvasHeight = canvas.height;
-                const ratio = canvasWidth / canvasHeight;
-                let width = pdfWidth;
-                let height = width / ratio;
-
-                if (height > pdfHeight) {
-                    height = pdfHeight;
-                    width = height * ratio;
-                }
-                const x = (pdfWidth - width) / 2;
-                
-                pdf.addImage(imgData, 'PNG', x, 0, width, height);
-                pdf.save(`relatorio-executivo-${formatDate(new Date(), false)}.pdf`);
-            })
-            .catch(err => console.error("Erro ao exportar PDF:", err))
-            .finally(() => {
-                input.classList.remove('printing');
-                setIsExporting(false);
-            });
-    };
     
     const getStatusColor = (progress) => {
         if (progress < 40) return 'bg-red-500';
@@ -851,10 +821,6 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
                         <h2 className="text-3xl font-bold text-gray-800 flex items-center"><Briefcase className="mr-3 text-indigo-600" />Painel Executivo</h2>
                         <p className="text-gray-600 mt-1">Visão consolidada do progresso, metas e riscos.</p>
                     </div>
-                    <Button onClick={handleExportPDF} variant="secondary" disabled={isExporting}>
-                        <Download size={16} className="mr-2" />
-                        {isExporting ? 'Exportando...' : 'Exportar para PDF'}
-                    </Button>
                 </div>
             </Card>
 
@@ -1470,4 +1436,3 @@ export default function App() {
         </div>
     );
 }
-
