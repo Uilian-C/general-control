@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, serverTimestamp } from 'firebase/firestore';
-import { Target, Flag, Plus, Trash2, X, Layers, Briefcase, Edit, Settings, Tag, Palette, TrendingUp, Download, Calendar, ListTodo, ZoomIn, ZoomOut, ChevronsUpDown, CheckCircle, MoreVertical, History, Check, Zap, ChevronDown } from 'lucide-react';
+import { Target, Flag, Plus, Trash2, X, Layers, Briefcase, Edit, Settings, Tag, Palette, TrendingUp, Download, Calendar, ListTodo, ZoomIn, ZoomOut, ChevronsUpDown, CheckCircle, MoreVertical, History, Check, Zap, ChevronDown, LayoutGrid, List } from 'lucide-react';
 
 // --- Configuração do Firebase ---
 const firebaseConfig = {
@@ -40,15 +40,7 @@ const TASK_COLORS = ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#c084fc', '#f4
 const formatDate = (dateInput) => {
   if (!dateInput) return '';
   const date = dateInput.toDate ? dateInput.toDate() : new Date(dateInput);
-  // Formatando para incluir data e hora
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'UTC'
-  }).format(date);
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }).format(date);
 };
 
 const getDaysInView = (startDate, endDate) => {
@@ -65,7 +57,7 @@ const getDaysInView = (startDate, endDate) => {
     return days;
 };
 
-// --- Lógica de Cálculo de OKR (Revisada e Comentada) ---
+// --- Lógica de Cálculo de OKR ---
 const calculateKrProgress = (kr) => {
     const start = Number(kr.startValue) || 0;
     const target = Number(kr.targetValue) || 100;
@@ -90,8 +82,8 @@ const calculateOkrProgress = (okr) => {
 
 
 // --- Componentes da UI ---
-const Card = ({ children, className = '' }) => (
-    <div className={`bg-white border border-gray-200 rounded-xl p-6 shadow-sm ${className}`}>
+const Card = ({ children, className = '', ...props }) => (
+    <div className={`bg-white border border-gray-200 rounded-xl p-6 shadow-sm ${className}`} {...props}>
         {children}
     </div>
 );
@@ -177,10 +169,8 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
         }
     };
     
-    const handleColorChange = (color) => setCurrentTask(prev => ({ ...prev, customColor: color }));
-    
     const handleSubtaskChange = (index, field, value) => {
-        const newSubtasks = [...currentTask.subtasks];
+        const newSubtasks = [...(currentTask.subtasks || [])];
         newSubtasks[index][field] = value;
         setCurrentTask(prev => ({ ...prev, subtasks: newSubtasks }));
     };
@@ -191,7 +181,7 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
     };
 
     const removeSubtask = (index) => {
-        const newSubtasks = currentTask.subtasks.filter((_, i) => i !== index);
+        const newSubtasks = (currentTask.subtasks || []).filter((_, i) => i !== index);
         setCurrentTask(prev => ({ ...prev, subtasks: newSubtasks }));
     };
 
@@ -242,7 +232,7 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
                 <section className={sectionClass}>
                     <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2"><ListTodo size={18} className="text-gray-400" /> Subtarefas</h3>
                     <div className="space-y-1 max-h-48 overflow-y-auto pr-2">
-                        {currentTask.subtasks && currentTask.subtasks.map((sub, index) => (
+                        {(currentTask.subtasks || []).map((sub, index) => (
                             <div key={sub.id} className="flex items-center gap-3 py-1 border-b border-gray-100 last:border-b-0">
                                 <input type="checkbox" checked={sub.completed} onChange={(e) => handleSubtaskChange(index, 'completed', e.target.checked)} className="form-checkbox h-5 w-5 bg-gray-200 border-gray-300 rounded text-indigo-600 focus:ring-indigo-500 flex-shrink-0" />
                                 <input type="text" value={sub.text} onChange={(e) => handleSubtaskChange(index, 'text', e.target.value)} className={`flex-grow p-1 bg-transparent border-none focus:ring-0 text-gray-800 ${sub.completed ? 'line-through text-gray-500' : ''}`} placeholder="Descrição da subtarefa" />
@@ -278,7 +268,7 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
                     )}
                 </section>
                 <footer className="flex justify-between items-center space-x-4 pt-6 mt-2">
-                    <div>{task && <Button onClick={() => onDeleteRequest(task.id)} variant="danger"><Trash2 size={16} /> Excluir</Button>}</div>
+                    <div>{task && <Button onClick={() => onDeleteRequest(task.id, 'task')} variant="danger"><Trash2 size={16} /> Excluir</Button>}</div>
                     <div className="flex items-center space-x-4">
                         <Button onClick={onClose} variant="secondary">Cancelar</Button>
                         <Button onClick={handleSave} variant="primary">Salvar</Button>
@@ -290,51 +280,90 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
 };
 
 const Timeline = ({ tasks, onTaskClick, zoomLevel, setViewStartDate, viewStartDate }) => {
-    const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
     const timelineRef = useRef(null);
     const [isDragging, setIsDragging] = useState(false);
     const [startX, setStartX] = useState(0);
     const [scrollLeft, setScrollLeft] = useState(0);
+    
     const dayWidth = useMemo(() => 20 + (zoomLevel * 4), [zoomLevel]);
-    const numDaysInView = useMemo(() => {
-        if (!timelineRef.current) return 30;
-        return Math.floor(timelineRef.current.clientWidth / dayWidth);
-    }, [dayWidth, timelineRef.current?.clientWidth]);
-    const endDate = useMemo(() => {
+    
+    const { days, timelineWidth, headerGroups, todayPosition } = useMemo(() => {
         const end = new Date(viewStartDate);
-        end.setDate(end.getDate() + numDaysInView);
-        return end;
-    }, [viewStartDate, numDaysInView]);
-    const days = useMemo(() => getDaysInView(viewStartDate, endDate), [viewStartDate, endDate]);
-    const timelineWidth = days.length * dayWidth;
-    const onMouseDown = (e) => { setIsDragging(true); setStartX(e.pageX - timelineRef.current.offsetLeft); setScrollLeft(timelineRef.current.scrollLeft); timelineRef.current.style.cursor = 'grabbing'; };
-    const onMouseLeaveOrUp = () => { setIsDragging(false); if (timelineRef.current) { timelineRef.current.style.cursor = 'grab'; } };
-    const onMouseMove = (e) => { if (!isDragging) return; e.preventDefault(); const x = e.pageX - timelineRef.current.offsetLeft; const walk = (x - startX); timelineRef.current.scrollLeft = scrollLeft - walk; };
-    const headerGroups = useMemo(() => {
-        const groups = []; if (!days.length) return groups; let currentGroup = null;
-        if (dayWidth < 25) {
-            days.forEach(day => {
-                const monthKey = `${day.getFullYear()}-${day.getMonth()}`;
-                if (!currentGroup || currentGroup.key !== monthKey) { currentGroup = { key: monthKey, label: new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(day), width: 0 }; groups.push(currentGroup); }
-                currentGroup.width += dayWidth;
-            });
-        } else if (dayWidth < 50) {
-            days.forEach(day => {
-                const year = day.getFullYear(); const weekNumber = Math.ceil((((day - new Date(year, 0, 1)) / 86400000) + new Date(year, 0, 1).getDay() + 1) / 7); const weekKey = `${year}-W${weekNumber}`;
-                if (!currentGroup || currentGroup.key !== weekKey) { currentGroup = { key: weekKey, label: `Semana ${weekNumber}`, width: 0 }; groups.push(currentGroup); }
-                currentGroup.width += dayWidth;
-            });
-        } else {
-            days.forEach(day => { groups.push({ key: day.toISOString(), label: day.getDate(), subLabel: new Intl.DateTimeFormat('pt-BR', { weekday: 'short' }).format(day).slice(0, 3), width: dayWidth, isToday: day.toDateString() === today.toDateString() }); });
+        end.setDate(end.getDate() + 45); // Fixed number of days for simplicity
+        const days = getDaysInView(viewStartDate, end);
+        const timelineWidth = days.length * dayWidth;
+        
+        const groups = [];
+        if (days.length > 0) {
+            let currentGroup = null;
+            if (dayWidth < 25) { // Group by month
+                days.forEach(day => {
+                    const monthKey = `${day.getFullYear()}-${day.getMonth()}`;
+                    if (!currentGroup || currentGroup.key !== monthKey) {
+                        currentGroup = { key: monthKey, label: new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(day), width: 0 };
+                        groups.push(currentGroup);
+                    }
+                    currentGroup.width += dayWidth;
+                });
+            } else if (dayWidth < 50) { // Group by week
+                days.forEach(day => {
+                    const year = day.getFullYear();
+                    const weekNumber = Math.ceil((((day - new Date(year, 0, 1)) / 86400000) + new Date(year, 0, 1).getDay() + 1) / 7);
+                    const weekKey = `${year}-W${weekNumber}`;
+                    if (!currentGroup || currentGroup.key !== weekKey) {
+                        currentGroup = { key: weekKey, label: `Semana ${weekNumber}`, width: 0 };
+                        groups.push(currentGroup);
+                    }
+                    currentGroup.width += dayWidth;
+                });
+            } else { // Group by day
+                days.forEach(day => {
+                    groups.push({ key: day.toISOString(), label: day.getDate(), subLabel: new Intl.DateTimeFormat('pt-BR', { weekday: 'short', timeZone: 'UTC' }).format(day).slice(0, 3), width: dayWidth, isToday: day.toDateString() === today.toDateString() });
+                });
+            }
         }
-        return groups;
-    }, [days, dayWidth]);
+        
+        const todayPos = (today.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24) * dayWidth;
+        
+        return { days, timelineWidth, headerGroups: groups, todayPosition: todayPos };
+    }, [viewStartDate, dayWidth]);
+
+    const onMouseDown = (e) => {
+        if (!timelineRef.current) return;
+        setIsDragging(true);
+        setStartX(e.pageX - timelineRef.current.offsetLeft);
+        setScrollLeft(timelineRef.current.scrollLeft);
+        timelineRef.current.style.cursor = 'grabbing';
+    };
+
+    const onMouseLeaveOrUp = () => {
+        if (!timelineRef.current) return;
+        setIsDragging(false);
+        timelineRef.current.style.cursor = 'grab';
+    };
+
+    const onMouseMove = (e) => {
+        if (!isDragging || !timelineRef.current) return;
+        e.preventDefault();
+        const x = e.pageX - timelineRef.current.offsetLeft;
+        const walk = (x - startX);
+        timelineRef.current.scrollLeft = scrollLeft - walk;
+    };
+
     const groupedTasks = useMemo(() => {
-        return tasks.reduce((acc, task) => { const group = task.projectTag || 'Geral'; if (!acc[group]) { acc[group] = []; } acc[group].push(task); return acc; }, {});
+        return tasks.reduce((acc, task) => {
+            const group = task.projectTag || 'Geral';
+            if (!acc[group]) acc[group] = [];
+            acc[group].push(task);
+            return acc;
+        }, {});
     }, [tasks]);
+
     const [collapsedGroups, setCollapsedGroups] = useState({});
     const toggleGroup = (group) => setCollapsedGroups(prev => ({ ...prev, [group]: !prev[group] }));
-    const todayPosition = (today.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24) * dayWidth;
+
     return (
         <div className="relative bg-white border border-gray-200 rounded-lg shadow-sm">
             <div className="overflow-x-auto cursor-grab" ref={timelineRef} onMouseDown={onMouseDown} onMouseLeave={onMouseLeaveOrUp} onMouseUp={onMouseLeaveOrUp} onMouseMove={onMouseMove}>
@@ -360,9 +389,9 @@ const Timeline = ({ tasks, onTaskClick, zoomLevel, setViewStartDate, viewStartDa
                                         <div className="relative" style={{ height: groupedTasks[group].length * 48 + 10 }}>
                                             {groupedTasks[group].map((task, taskIndex) => {
                                                 const taskStart = new Date(task.startDate); taskStart.setUTCHours(0, 0, 0, 0); const taskEnd = new Date(task.endDate); taskEnd.setUTCHours(0, 0, 0, 0);
-                                                if (taskEnd < viewStartDate || taskStart > endDate) return null;
-                                                const startOffset = (taskStart - viewStartDate) / (1000 * 60 * 60 * 24); const duration = Math.max(1, (taskEnd - taskStart) / (1000 * 60 * 60 * 24) + 1); const left = startOffset * dayWidth; const width = duration * dayWidth - 4;
-                                                const subtaskProgress = task.subtasks && task.subtasks.length > 0 ? (task.subtasks.filter(s => s.completed).length / task.subtasks.length) * 100 : (task.status === 'Concluído' ? 100 : 0);
+                                                if (taskEnd < viewStartDate || taskStart > new Date(viewStartDate).setDate(viewStartDate.getDate() + 45)) return null;
+                                                const startOffset = (taskStart.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24); const duration = Math.max(1, (taskEnd.getTime() - taskStart.getTime()) / (1000 * 60 * 60 * 24) + 1); const left = startOffset * dayWidth; const width = duration * dayWidth - 4;
+                                                const subtaskProgress = (task.subtasks || []).length > 0 ? ((task.subtasks.filter(s => s.completed).length / task.subtasks.length) * 100) : (task.status === 'Concluído' ? 100 : 0);
                                                 return (
                                                     <div key={task.id} id={`task-${task.id}`} className="h-10 absolute flex items-center rounded-lg cursor-pointer transition-all duration-200 group" style={{ top: `${taskIndex * 48 + 5}px`, left: `${left}px`, width: `${width}px` }} onClick={() => onTaskClick(task)} title={`${task.title} - ${STATUSES[task.status]?.label} (${Math.round(subtaskProgress)}%)`}>
                                                         <div className={`h-full w-full rounded-lg flex items-center overflow-hidden relative shadow-md group-hover:shadow-lg group-hover:scale-[1.02] transition-all duration-200 ${!task.customColor ? 'bg-gradient-to-r from-gray-400 to-gray-500' : ''}`} style={task.customColor ? { backgroundColor: task.customColor } : {}}>
@@ -403,7 +432,7 @@ const WorkspaceView = ({ tasks, onTaskClick, filters, setFilters, zoomLevel, set
         <div className="space-y-6">
             <Card>
                 <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-2"><Button onClick={() => setViewStartDate(new Date())} variant="secondary">Hoje</Button></div>
+                    <div className="flex items-center gap-2"><Button onClick={() => setViewStartDate(new Date(new Date().setDate(new Date().getDate() - 15)))} variant="secondary">Hoje</Button></div>
                     <div className="flex flex-wrap justify-center items-center gap-4">
                         <FilterGroup title="Prioridade" options={PRIORITIES} active={filters.priority} onFilterChange={val => setFilters({...filters, priority: val})}/>
                         <FilterGroup title="Status" options={STATUSES} active={filters.status} onFilterChange={val => setFilters({...filters, status: val})}/>
@@ -454,7 +483,7 @@ const ExecutiveView = ({ tasks, okrs }) => {
                     {milestones.length > 0 ? milestones.map(milestone => (
                         <div key={milestone.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
                             <div><p className="font-semibold text-gray-700">[{milestone.humanId}] {milestone.title}</p><p className="text-sm text-gray-500">{milestone.description}</p></div>
-                            <div className="text-right flex-shrink-0 ml-4"><p className={`text-sm font-bold px-3 py-1 rounded-full ${STATUSES[milestone.status]?.color || 'bg-gray-200 text-gray-800'}`}>{milestone.status}</p><p className="text-xs text-gray-500 mt-1">{formatDate(milestone.startDate)} - {formatDate(milestone.endDate)}</p></div>
+                            <div className="text-right flex-shrink-0 ml-4"><p className={`text-sm font-bold px-3 py-1 rounded-full ${STATUSES[milestone.status]?.color || 'bg-gray-200 text-gray-800'}`}>{milestone.status}</p><p className="text-xs text-gray-500 mt-1">{formatDate(new Date(milestone.startDate))} - {formatDate(new Date(milestone.endDate))}</p></div>
                         </div>
                     )) : <p className="text-gray-500">Nenhum marco definido no roadmap.</p>}
                  </div>
@@ -524,9 +553,7 @@ const OkrForm = ({ okr, onSave, onCancel }) => {
 
 const KrHistoryModal = ({ isOpen, onClose, kr, onDeleteUpdate }) => {
     if (!isOpen) return null;
-
     const sortedUpdates = kr.updates ? [...kr.updates].sort((a, b) => new Date(b.date) - new Date(a.date)) : [];
-
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={`Histórico de Progresso`} size="2xl">
             <div className="space-y-4">
@@ -539,23 +566,16 @@ const KrHistoryModal = ({ isOpen, onClose, kr, onDeleteUpdate }) => {
                                     <span className="font-semibold text-indigo-700">Valor: {update.value}</span>
                                     <p className="text-sm text-gray-500">Registrado em: {formatDate(new Date(update.date))}</p>
                                 </div>
-                                <Button onClick={() => onDeleteUpdate(kr.id, update.date)} variant="ghost" className="!p-2 text-red-500 hover:bg-red-100">
-                                    <Trash2 size={16} />
-                                </Button>
+                                <Button onClick={() => onDeleteUpdate(kr.id, update.date)} variant="ghost" className="!p-2 text-red-500 hover:bg-red-100"><Trash2 size={16} /></Button>
                             </li>
                         ))}
                     </ul>
-                ) : (
-                    <p className="text-gray-500">Nenhum registro de progresso ainda.</p>
-                )}
-                <div className="flex justify-end pt-4 border-t">
-                    <Button onClick={onClose} variant="secondary">Fechar</Button>
-                </div>
+                ) : <p className="text-gray-500">Nenhum registro de progresso ainda.</p>}
+                <div className="flex justify-end pt-4 border-t"><Button onClick={onClose} variant="secondary">Fechar</Button></div>
             </div>
         </Modal>
     );
 };
-
 
 const KrItem = ({ kr, onUpdate, onDeleteUpdate }) => {
     const [isUpdating, setIsUpdating] = useState(false);
@@ -570,12 +590,7 @@ const KrItem = ({ kr, onUpdate, onDeleteUpdate }) => {
 
     return (
         <>
-            <KrHistoryModal
-                isOpen={isHistoryOpen}
-                onClose={() => setIsHistoryOpen(false)}
-                kr={kr}
-                onDeleteUpdate={onDeleteUpdate}
-            />
+            <KrHistoryModal isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} kr={kr} onDeleteUpdate={onDeleteUpdate} />
             <div className="p-4 bg-white rounded-lg border border-gray-200 hover:border-gray-300 transition-all">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                     <p className="font-medium text-gray-800 flex-1">{kr.text}</p>
@@ -600,16 +615,15 @@ const KrItem = ({ kr, onUpdate, onDeleteUpdate }) => {
                     </div>
                 </div>
                 <div className="mt-2">
-                    <div className="w-full bg-gray-200 rounded-full h-2.5">
-                        <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div>
-                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div></div>
                 </div>
             </div>
         </>
     );
-}
+};
 
 const OkrView = ({ okrs, onSave, onDelete }) => {
+    const [layout, setLayout] = useState('list'); // 'list' or 'grid'
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingOkr, setEditingOkr] = useState(null);
     const [expandedOkrs, setExpandedOkrs] = useState({});
@@ -629,11 +643,7 @@ const OkrView = ({ okrs, onSave, onDelete }) => {
     const handleKrUpdate = (okr, krId, newValue) => {
         const updatedKeyResults = okr.keyResults.map(kr => {
             if (kr.id === krId) {
-                const newUpdate = {
-                    id: `update_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                    value: newValue,
-                    date: new Date().toISOString()
-                };
+                const newUpdate = { id: `update_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, value: newValue, date: new Date().toISOString() };
                 const newUpdates = [...(kr.updates || []), newUpdate];
                 return { ...kr, currentValue: newValue, updates: newUpdates };
             }
@@ -654,7 +664,6 @@ const OkrView = ({ okrs, onSave, onDelete }) => {
         });
         onSave({ ...okr, keyResults: updatedKeyResults });
     };
-
 
     const handleEdit = (okr) => {
         setEditingOkr(okr);
@@ -679,68 +688,66 @@ const OkrView = ({ okrs, onSave, onDelete }) => {
 
     return (
         <>
-            <ConfirmModal
-                isOpen={isConfirmDeleteOpen}
-                onClose={() => setIsConfirmDeleteOpen(false)}
-                onConfirm={confirmDeleteOkr}
-                title="Confirmar Exclusão de Objetivo"
-            >
+            <ConfirmModal isOpen={isConfirmDeleteOpen} onClose={() => setIsConfirmDeleteOpen(false)} onConfirm={confirmDeleteOkr} title="Confirmar Exclusão de Objetivo">
                 <p>Tem certeza que deseja excluir este Objetivo e todos os seus KRs? Esta ação não pode ser desfeita.</p>
             </ConfirmModal>
 
             <div className="space-y-6">
                 <Card>
-                    <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-                        <div>
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div className="flex-1">
                             <h2 className="text-3xl font-bold text-gray-800 flex items-center"><Target className="mr-3 text-indigo-600" />Objetivos e Resultados-Chave</h2>
                             <p className="text-gray-600 mt-1">Defina e acompanhe as metas que impulsionam seu roadmap.</p>
                         </div>
-                        {!isFormOpen && (
-                            <Button onClick={() => setIsFormOpen(true)} variant="primary">
-                                <Plus size={16} /> Novo Objetivo
-                            </Button>
-                        )}
+                        <div className="flex items-center gap-4">
+                            <div className="flex items-center bg-gray-100 rounded-lg p-1">
+                                <button onClick={() => setLayout('list')} className={`p-2 rounded-md transition-colors ${layout === 'list' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}><List size={20} /></button>
+                                <button onClick={() => setLayout('grid')} className={`p-2 rounded-md transition-colors ${layout === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}><LayoutGrid size={20} /></button>
+                            </div>
+                            {!isFormOpen && (
+                                <Button onClick={() => setIsFormOpen(true)} variant="primary">
+                                    <Plus size={16} /> Novo Objetivo
+                                </Button>
+                            )}
+                        </div>
                     </div>
                 </Card>
 
                 {isFormOpen && <OkrForm key={editingOkr?.id || 'new'} okr={editingOkr} onSave={handleSave} onCancel={handleCancel} />}
 
-                <div className="space-y-6">
+                <div className={layout === 'list' ? "space-y-6" : "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"}>
                     {okrs.map(okr => {
                         const progress = calculateOkrProgress(okr);
                         const isExpanded = !!expandedOkrs[okr.id];
                         return (
-                            <Card key={okr.id} className="transition-all duration-300 overflow-hidden !p-0">
-                                <div className="p-6">
+                            <Card key={okr.id} className={`transition-all duration-300 overflow-hidden ${layout === 'list' ? '!p-0' : ''}`}>
+                                <div className={layout === 'list' ? 'p-6' : 'p-0'}>
                                     <div className="flex justify-between items-start">
                                         <h3 className="text-xl font-bold text-gray-800 flex-1 pr-4">{okr.objective}</h3>
                                         <div className="flex space-x-2">
-                                            <Button onClick={() => handleEdit(okr)} variant="ghost" className="!p-2"><Edit size={16} /></Button>
-                                            <Button onClick={() => requestDeleteOkr(okr.id)} variant="ghost" className="!p-2 text-red-500 hover:bg-red-50"><Trash2 size={16} /></Button>
+                                            <Button onClick={(e) => { e.stopPropagation(); handleEdit(okr); }} variant="ghost" className="!p-2"><Edit size={16} /></Button>
+                                            <Button onClick={(e) => { e.stopPropagation(); requestDeleteOkr(okr.id); }} variant="ghost" className="!p-2 text-red-500 hover:bg-red-50"><Trash2 size={16} /></Button>
                                         </div>
                                     </div>
                                     
-                                    <div className="mt-3 flex items-center gap-4 cursor-pointer" onClick={() => toggleExpansion(okr.id)}>
+                                    <div className="mt-3 flex items-center gap-4 cursor-pointer" onClick={() => layout === 'list' && toggleExpansion(okr.id)}>
                                         <div className="w-full bg-gray-200 rounded-full h-4">
                                             <div className="bg-gradient-to-r from-sky-500 to-indigo-600 h-4 rounded-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
                                         </div>
                                         <span className="text-lg font-bold text-indigo-600">{progress}%</span>
-                                        <ChevronDown size={20} className={`text-gray-500 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                                        {layout === 'list' && <ChevronDown size={20} className={`text-gray-500 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />}
                                     </div>
                                 </div>
                                 
-                                <div className={`transition-all duration-500 ease-in-out bg-gray-50/50 ${isExpanded ? 'max-h-[1000px] py-4' : 'max-h-0'}`}>
-                                    <div className="px-6 space-y-3">
-                                        {okr.keyResults.map(kr => (
-                                            <KrItem 
-                                                key={kr.id} 
-                                                kr={kr} 
-                                                onUpdate={(krId, newValue) => handleKrUpdate(okr, krId, newValue)}
-                                                onDeleteUpdate={(krId, updateDate) => handleDeleteUpdate(okr, krId, updateDate)}
-                                            />
-                                        ))}
+                                {layout === 'list' && (
+                                    <div className={`transition-all duration-500 ease-in-out bg-gray-50/50 ${isExpanded ? 'max-h-[1000px] py-4' : 'max-h-0'}`}>
+                                        <div className="px-6 space-y-3">
+                                            {okr.keyResults.map(kr => (
+                                                <KrItem key={kr.id} kr={kr} onUpdate={(krId, newValue) => handleKrUpdate(okr, krId, newValue)} onDeleteUpdate={(krId, updateDate) => handleDeleteUpdate(okr, krId, updateDate)} />
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                             </Card>
                         )
                     })}
@@ -759,7 +766,7 @@ export default function App() {
     const [tasks, setTasks] = useState([]);
     const [okrs, setOkrs] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [view, setView] = useState('workspace'); // 'workspace', 'executive', 'okr'
+    const [view, setView] = useState('workspace');
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState(null);
     const [filters, setFilters] = useState({ priority: 'Todos', status: 'Todos' });
@@ -774,14 +781,8 @@ export default function App() {
     
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (user) => {
-            if (user) {
-                setUserId(user.uid);
-            } else {
-                signInAnonymously(auth).catch((authError) => {
-                    console.error("Anonymous sign-in error:", authError);
-                    setError("Falha na autenticação.");
-                });
-            }
+            if (user) setUserId(user.uid);
+            else signInAnonymously(auth).catch((authError) => { console.error("Anonymous sign-in error:", authError); setError("Falha na autenticação."); });
         });
         return () => unsubscribe();
     }, []);
@@ -802,9 +803,7 @@ export default function App() {
             okrData.forEach(okr => {
                 if (okr.keyResults) {
                     okr.keyResults.forEach(kr => {
-                        if (kr.updates) {
-                            kr.updates.sort((a, b) => new Date(a.date) - new Date(b.date));
-                        }
+                        if (kr.updates) kr.updates.sort((a, b) => new Date(a.date) - new Date(b.date));
                     });
                 }
             });
@@ -912,7 +911,7 @@ export default function App() {
                     tasks={tasks}
                     okrs={okrs}
                     onSave={handleSaveTask}
-                    onDeleteRequest={(id) => requestDelete(id, 'task')}
+                    onDeleteRequest={requestDelete}
                 />
                 <ConfirmModal
                     isOpen={isConfirmDeleteOpen}
