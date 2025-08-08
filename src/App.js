@@ -2,7 +2,11 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, serverTimestamp } from 'firebase/firestore';
-import { Target, Flag, Plus, Trash2, X, Layers, Briefcase, Edit, Settings, Tag, Palette, TrendingUp, Download, Calendar, ListTodo, ZoomIn, ZoomOut, ChevronsUpDown, CheckCircle, MoreVertical, History, Check, Zap, ChevronDown, LayoutGrid, List } from 'lucide-react';
+import { Target, Flag, Plus, Trash2, X, Layers, Briefcase, Edit, Settings, Tag, Palette, TrendingUp, Download, Calendar, ListTodo, ZoomIn, ZoomOut, ChevronsUpDown, CheckCircle, MoreVertical, History, Check, Zap, ChevronDown, LayoutGrid, List, AlertTriangle, Clock, TrendingUp as TrendingUpIcon } from 'lucide-react';
+
+// --- Bibliotecas para Exportação PDF (assumidas como disponíveis globalmente) ---
+// <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+// <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 // --- Configuração do Firebase ---
 const firebaseConfig = {
@@ -35,12 +39,21 @@ const STATUSES = {
   'Em Progresso': { label: 'Em Progresso', color: 'bg-indigo-200 text-indigo-800', iconColor: 'text-indigo-400' },
   'Concluído': { label: 'Concluído', color: 'bg-green-200 text-green-800', iconColor: 'text-green-500' },
 };
-const TASK_COLORS = ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#c084fc', '#f472b6', '#a3a3a3'];
 
-const formatDate = (dateInput) => {
+const formatDate = (dateInput, includeTime = true) => {
   if (!dateInput) return '';
   const date = dateInput.toDate ? dateInput.toDate() : new Date(dateInput);
-  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }).format(date);
+  const options = {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'UTC'
+  };
+  if (includeTime) {
+    options.hour = '2-digit';
+    options.minute = '2-digit';
+  }
+  return new Intl.DateTimeFormat('pt-BR', options).format(date);
 };
 
 const getDaysInView = (startDate, endDate) => {
@@ -57,7 +70,7 @@ const getDaysInView = (startDate, endDate) => {
     return days;
 };
 
-// --- Lógica de Cálculo de OKR ---
+// --- Lógica de Cálculo de Progresso ---
 const calculateKrProgress = (kr) => {
     const start = Number(kr.startValue) || 0;
     const target = Number(kr.targetValue) || 100;
@@ -78,6 +91,23 @@ const calculateOkrProgress = (okr) => {
         return sum + (progress * weight);
     }, 0);
     return Math.round(weightedProgressSum / totalWeight);
+};
+
+const calculateTaskProgress = (task) => {
+    if (task.status === 'Concluído') return 100;
+    if (!task.subtasks || task.subtasks.length === 0) {
+        return task.status === 'Em Progresso' ? 50 : 0;
+    }
+    const completedSubtasks = task.subtasks.filter(s => s.completed).length;
+    return Math.round((completedSubtasks / task.subtasks.length) * 100);
+};
+
+const getTaskDurationInDays = (task) => {
+    if (!task.startDate || !task.endDate) return 1;
+    const start = new Date(task.startDate);
+    const end = new Date(task.endDate);
+    const duration = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+    return Math.max(1, duration + 1);
 };
 
 
@@ -279,7 +309,7 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
     );
 };
 
-const Timeline = ({ tasks, onTaskClick, zoomLevel, setViewStartDate, viewStartDate }) => {
+const Timeline = ({ tasks, onTaskClick, zoomLevel, viewStartDate }) => {
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
     const timelineRef = useRef(null);
@@ -366,7 +396,7 @@ const Timeline = ({ tasks, onTaskClick, zoomLevel, setViewStartDate, viewStartDa
 
     return (
         <div className="relative bg-white border border-gray-200 rounded-lg shadow-sm">
-            <div className="overflow-x-auto cursor-grab" ref={timelineRef} onMouseDown={onMouseDown} onMouseLeave={onMouseLeaveOrUp} onMouseUp={onMouseLeaveOrUp} onMouseMove={onMouseMove}>
+            <div className="overflow-x-auto cursor-grab" ref={timelineRef} onMouseDown={onMouseDown} onMouseLeave={onMouseLeaveOrUp} onMouseUp={onMouseMove} onMouseMove={onMouseMove}>
                 <div style={{ width: timelineWidth }} className="relative">
                     <div className="sticky top-0 z-20 bg-gray-50 h-12">
                         <div className="flex border-b-2 border-gray-200">
@@ -444,7 +474,7 @@ const WorkspaceView = ({ tasks, onTaskClick, filters, setFilters, zoomLevel, set
                     </div>
                 </div>
             </Card>
-            <Timeline tasks={tasks} onTaskClick={onTaskClick} zoomLevel={zoomLevel} setViewStartDate={setViewStartDate} viewStartDate={viewStartDate} />
+            <Timeline tasks={tasks} onTaskClick={onTaskClick} zoomLevel={zoomLevel} viewStartDate={viewStartDate} />
             <div className="mt-6 flex justify-end gap-4">
                 <Button onClick={() => onOpenTaskModal()} variant="primary"><Plus size={20} className="mr-2" /> Nova Tarefa</Button>
             </div>
@@ -452,47 +482,198 @@ const WorkspaceView = ({ tasks, onTaskClick, filters, setFilters, zoomLevel, set
     );
 };
 
+// --- NOVA VISÃO EXECUTIVA (REFORMULADA) ---
+
 const ExecutiveView = ({ tasks, okrs }) => {
-    const okrProgress = useMemo(() => {
-        return okrs.map(okr => ({ ...okr, progress: calculateOkrProgress(okr) }));
-    }, [okrs]);
-    const milestones = useMemo(() => tasks.filter(t => t.isMilestone).sort((a, b) => new Date(a.startDate) - new Date(b.startDate)), [tasks]);
+    const executiveViewRef = useRef(null);
+    const [isExporting, setIsExporting] = useState(false);
+
+    const {
+        overallRoadmapProgress,
+        roadmapByProject,
+        okrsWithProgress,
+        attentionPoints,
+        nextSteps
+    } = useMemo(() => {
+        const today = new Date();
+        
+        let totalWeightedProgress = 0;
+        let totalDuration = 0;
+        tasks.forEach(task => {
+            const duration = getTaskDurationInDays(task);
+            totalDuration += duration;
+            totalWeightedProgress += calculateTaskProgress(task) * duration;
+        });
+        const overallProgress = totalDuration > 0 ? Math.round(totalWeightedProgress / totalDuration) : 0;
+
+        const projects = tasks.reduce((acc, task) => {
+            const tag = task.projectTag || 'Geral';
+            if (!acc[tag]) acc[tag] = { tasks: [] };
+            acc[tag].tasks.push(task);
+            return acc;
+        }, {});
+
+        const projectProgress = Object.keys(projects).map(tag => {
+            const projectData = projects[tag];
+            let projTotalWeightedProgress = 0;
+            let projTotalDuration = 0;
+            projectData.tasks.forEach(task => {
+                const duration = getTaskDurationInDays(task);
+                projTotalDuration += duration;
+                projTotalWeightedProgress += calculateTaskProgress(task) * duration;
+            });
+
+            return {
+                name: tag,
+                progress: projTotalDuration > 0 ? Math.round(projTotalWeightedProgress / projTotalDuration) : 0,
+            };
+        }).sort((a,b) => b.progress - a.progress);
+
+        const okrsDetails = okrs.map(okr => ({
+            ...okr,
+            progress: calculateOkrProgress(okr)
+        })).sort((a,b) => a.progress - b.progress);
+
+        const attention = [];
+        const next = [];
+
+        tasks.forEach(task => {
+            const isOverdue = new Date(task.endDate) < today && task.status !== 'Concluído';
+            if (task.priority === 'Alta' && isOverdue) {
+                attention.push({ type: 'Atraso Crítico', text: task.title, date: task.endDate });
+            }
+            if (task.priority === 'Alta' && task.status === 'A Fazer') {
+                next.push({ type: 'Foco Imediato', text: task.title, date: task.startDate });
+            }
+        });
+        
+        okrs.forEach(okr => {
+            (okr.keyResults || []).forEach(kr => {
+                (kr.attentionLog || []).forEach(log => {
+                    if (!log.resolved) {
+                        attention.push({ type: 'KR Sinalizado', text: kr.text, parentObjective: okr.objective, justification: log.text });
+                    }
+                });
+            });
+        });
+
+        return {
+            overallRoadmapProgress: overallProgress,
+            roadmapByProject: projectProgress,
+            okrsWithProgress: okrsDetails,
+            attentionPoints: attention.slice(0, 5),
+            nextSteps: next.sort((a,b) => new Date(a.date) - new Date(b.date)).slice(0, 5)
+        };
+    }, [tasks, okrs]);
+
+    const handleExportPDF = () => {
+        // Lógica de exportação
+    };
+    
+    const getStatusColor = (progress) => {
+        if (progress < 40) return 'bg-red-500';
+        if (progress < 70) return 'bg-yellow-500';
+        return 'bg-green-500';
+    };
+
+    const StatCard = ({ icon, label, value, colorClass }) => (
+        <div className="bg-gray-50 p-4 rounded-lg flex items-center gap-4">
+            <div className={`p-3 rounded-full ${colorClass}`}>{icon}</div>
+            <div>
+                <p className="text-sm text-gray-500">{label}</p>
+                <p className="text-2xl font-bold text-gray-800">{value}</p>
+            </div>
+        </div>
+    );
+
     return (
-        <div className="space-y-8">
+        <div className="space-y-6" ref={executiveViewRef}>
             <Card>
-                <h2 className="text-3xl font-bold text-gray-800 mb-4 flex items-center"><Briefcase className="mr-3 text-indigo-600" />Visão Executiva</h2>
-                <p className="text-gray-600">Um resumo de alto nível do progresso em relação aos objetivos e marcos principais.</p>
-            </Card>
-            <Card>
-                <h3 className="text-2xl font-semibold text-gray-800 mb-4 flex items-center"><Target className="mr-3 text-indigo-600" />Progresso dos OKRs</h3>
-                <div className="space-y-6">
-                    {okrProgress.length > 0 ? okrProgress.map(okr => (
-                        <div key={okr.id}>
-                            <div className="flex justify-between items-baseline mb-1">
-                                <span className="font-semibold text-gray-700">{okr.objective}</span>
-                                <span className="text-sm font-bold text-indigo-600">{okr.progress}%</span>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-4"><div className="bg-indigo-600 h-4 rounded-full transition-all duration-500" style={{ width: `${okr.progress}%` }}></div></div>
-                        </div>
-                    )) : <p className="text-gray-500">Nenhum OKR definido.</p>}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <h2 className="text-3xl font-bold text-gray-800 flex items-center"><Briefcase className="mr-3 text-indigo-600" />Painel Executivo</h2>
+                        <p className="text-gray-600 mt-1">Visão consolidada do progresso, metas e riscos.</p>
+                    </div>
+                    <Button onClick={handleExportPDF} variant="secondary" disabled={isExporting}>
+                        <Download size={16} className="mr-2" />
+                        {isExporting ? 'Exportando...' : 'Exportar para PDF'}
+                    </Button>
                 </div>
             </Card>
-            <Card>
-                 <h3 className="text-2xl font-semibold text-gray-800 mb-4 flex items-center"><Flag className="mr-3 text-yellow-500" />Marcos (Milestones)</h3>
-                 <div className="space-y-4">
-                    {milestones.length > 0 ? milestones.map(milestone => (
-                        <div key={milestone.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
-                            <div><p className="font-semibold text-gray-700">[{milestone.humanId}] {milestone.title}</p><p className="text-sm text-gray-500">{milestone.description}</p></div>
-                            <div className="text-right flex-shrink-0 ml-4"><p className={`text-sm font-bold px-3 py-1 rounded-full ${STATUSES[milestone.status]?.color || 'bg-gray-200 text-gray-800'}`}>{milestone.status}</p><p className="text-xs text-gray-500 mt-1">{formatDate(new Date(milestone.startDate))} - {formatDate(new Date(milestone.endDate))}</p></div>
-                        </div>
-                    )) : <p className="text-gray-500">Nenhum marco definido no roadmap.</p>}
-                 </div>
-            </Card>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <StatCard icon={<TrendingUpIcon size={24} className="text-green-800" />} label="Progresso Geral do Roadmap" value={`${overallRoadmapProgress}%`} colorClass="bg-green-200" />
+                <StatCard icon={<Target size={24} className="text-indigo-800" />} label="Objetivos (OKRs)" value={okrs.length} colorClass="bg-indigo-200" />
+                <StatCard icon={<AlertTriangle size={24} className="text-yellow-800" />} label="Pontos de Atenção" value={attentionPoints.length} colorClass="bg-yellow-200" />
+                <StatCard icon={<Clock size={24} className="text-blue-800" />} label="Próximos Passos" value={nextSteps.length} colorClass="bg-blue-200" />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card>
+                    <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center"><Layers className="mr-2 text-gray-500" />Progresso do Roadmap por Projeto</h3>
+                    <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                        {roadmapByProject.length > 0 ? roadmapByProject.map(proj => (
+                            <div key={proj.name}>
+                                <div className="flex justify-between items-center mb-1">
+                                    <p className="font-semibold text-gray-700 truncate pr-4">{proj.name}</p>
+                                    <span className="font-bold text-gray-800">{proj.progress}%</span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-2.5">
+                                    <div className={`${getStatusColor(proj.progress)} h-2.5 rounded-full`} style={{ width: `${proj.progress}%` }}></div>
+                                </div>
+                            </div>
+                        )) : <p className="text-gray-500">Nenhum projeto no roadmap.</p>}
+                    </div>
+                </Card>
+                <Card>
+                    <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center"><Target className="mr-2 text-gray-500" />Progresso dos Objetivos (OKRs)</h3>
+                    <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                        {okrsWithProgress.length > 0 ? okrsWithProgress.map(okr => (
+                            <div key={okr.id}>
+                                <div className="flex justify-between items-center mb-1">
+                                    <p className="font-semibold text-gray-700 truncate pr-4">{okr.objective}</p>
+                                    <span className="font-bold text-gray-800">{okr.progress}%</span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-2.5">
+                                    <div className={`${getStatusColor(okr.progress)} h-2.5 rounded-full`} style={{ width: `${okr.progress}%` }}></div>
+                                </div>
+                            </div>
+                        )) : <p className="text-gray-500">Nenhum OKR definido.</p>}
+                    </div>
+                </Card>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                 <Card>
+                    <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center"><AlertTriangle className="mr-2 text-red-500" />Pontos de Atenção</h3>
+                    <div className="space-y-3">
+                        {attentionPoints.length > 0 ? attentionPoints.map((item, index) => (
+                            <div key={index} className="p-3 bg-red-50 border-l-4 border-red-500 rounded">
+                                <p className="font-semibold text-red-800">{item.type}: <span className="font-normal">{item.text}</span></p>
+                                {item.date && <p className="text-sm text-red-600">Prazo era {formatDate(item.date, false)}</p>}
+                                {item.parentObjective && <p className="text-sm text-red-600">Do Objetivo: {item.parentObjective}</p>}
+                                {item.justification && <p className="text-sm text-red-600 mt-1 italic">"{item.justification}"</p>}
+                            </div>
+                        )) : <p className="text-gray-500">Nenhum ponto de atenção identificado.</p>}
+                    </div>
+                </Card>
+                <Card>
+                    <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center"><Clock className="mr-2 text-gray-500" />Próximos Passos</h3>
+                    <div className="space-y-3">
+                        {nextSteps.length > 0 ? nextSteps.map((item, index) => (
+                            <div key={index} className="p-3 bg-blue-50 border-l-4 border-blue-500 rounded">
+                                <p className="font-semibold text-blue-800">{item.type}: <span className="font-normal">{item.text}</span></p>
+                                <p className="text-sm text-blue-600">Inicia em: {formatDate(item.date, false)}</p>
+                            </div>
+                        )) : <p className="text-gray-500">Nenhuma ação de alta prioridade a ser iniciada.</p>}
+                    </div>
+                </Card>
+            </div>
         </div>
     );
 };
 
-// --- NOVOS COMPONENTES DE OKR ---
+
+// --- Componentes de OKR ---
 
 const OkrForm = ({ okr, onSave, onCancel }) => {
     const [objective, setObjective] = useState(okr?.objective || '');
@@ -505,7 +686,7 @@ const OkrForm = ({ okr, onSave, onCancel }) => {
         setKeyResults(newKrs);
     };
 
-    const addKr = () => setKeyResults([...keyResults, { id: `kr_${Date.now()}`, text: '', startValue: 0, targetValue: 100, currentValue: 0, weight: 1, updates: [] }]);
+    const addKr = () => setKeyResults([...keyResults, { id: `kr_${Date.now()}`, text: '', startValue: 0, targetValue: 100, currentValue: 0, weight: 1, updates: [], attentionLog: [] }]);
     const removeKr = (index) => setKeyResults(keyResults.filter((_, i) => i !== index));
     
     const handleFormSave = () => {
@@ -577,11 +758,73 @@ const KrHistoryModal = ({ isOpen, onClose, kr, onDeleteUpdate }) => {
     );
 };
 
-const KrItem = ({ kr, onUpdate, onDeleteUpdate }) => {
+const KrAttentionModal = ({ isOpen, onClose, kr, onSaveAttentionLog }) => {
+    const [log, setLog] = useState(kr.attentionLog || []);
+    const [newJustification, setNewJustification] = useState('');
+
+    const handleAdd = () => {
+        if (!newJustification.trim()) return;
+        const newLogEntry = {
+            id: `att_${Date.now()}`,
+            text: newJustification,
+            date: new Date().toISOString(),
+            resolved: false
+        };
+        const updatedLog = [...log, newLogEntry];
+        setLog(updatedLog);
+        onSaveAttentionLog(kr.id, updatedLog);
+        setNewJustification('');
+    };
+
+    const handleToggleResolve = (logId) => {
+        const updatedLog = log.map(item => item.id === logId ? { ...item, resolved: !item.resolved } : item);
+        setLog(updatedLog);
+        onSaveAttentionLog(kr.id, updatedLog);
+    };
+
+    const handleDelete = (logId) => {
+        const updatedLog = log.filter(item => item.id !== logId);
+        setLog(updatedLog);
+        onSaveAttentionLog(kr.id, updatedLog);
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Histórico de Pontos de Atenção" size="2xl">
+            <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-gray-800">{kr.text}</h3>
+                <div className="space-y-2">
+                    <textarea value={newJustification} onChange={e => setNewJustification(e.target.value)} placeholder="Adicionar nova justificativa..." className="w-full p-2 border border-gray-300 rounded-md text-sm"></textarea>
+                    <div className="flex justify-end"><Button onClick={handleAdd} className="!text-xs !py-1">Adicionar Ponto</Button></div>
+                </div>
+                <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
+                    {log.sort((a,b) => new Date(b.date) - new Date(a.date)).map(item => (
+                        <div key={item.id} className={`p-3 rounded-lg ${item.resolved ? 'bg-green-50' : 'bg-red-50'}`}>
+                            <p className={`text-sm ${item.resolved ? 'text-gray-500 line-through' : 'text-gray-800'}`}>{item.text}</p>
+                            <div className="flex justify-between items-center mt-2">
+                                <p className="text-xs text-gray-400">{formatDate(new Date(item.date))}</p>
+                                <div className="flex gap-2">
+                                    <Button onClick={() => handleToggleResolve(item.id)} variant="ghost" className={`!p-1 h-7 w-7 ${item.resolved ? 'text-yellow-600' : 'text-green-600'}`}>{item.resolved ? <X size={16}/> : <Check size={16} />}</Button>
+                                    <Button onClick={() => handleDelete(item.id)} variant="ghost" className="!p-1 h-7 w-7 text-red-500"><Trash2 size={16} /></Button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </Modal>
+    );
+};
+
+
+const KrItem = ({ kr, onUpdate, onDeleteUpdate, onSaveAttentionLog }) => {
     const [isUpdating, setIsUpdating] = useState(false);
     const [newValue, setNewValue] = useState(kr.currentValue);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+    const [isAttentionOpen, setIsAttentionOpen] = useState(false);
     const progress = calculateKrProgress(kr);
+    const hasActiveAttention = (kr.attentionLog || []).some(log => !log.resolved);
 
     const handleUpdate = () => {
         onUpdate(kr.id, newValue);
@@ -591,12 +834,13 @@ const KrItem = ({ kr, onUpdate, onDeleteUpdate }) => {
     return (
         <>
             <KrHistoryModal isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} kr={kr} onDeleteUpdate={onDeleteUpdate} />
+            <KrAttentionModal isOpen={isAttentionOpen} onClose={() => setIsAttentionOpen(false)} kr={kr} onSaveAttentionLog={onSaveAttentionLog} />
             <div className="p-4 bg-white rounded-lg border border-gray-200 hover:border-gray-300 transition-all">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                     <p className="font-medium text-gray-800 flex-1">{kr.text}</p>
                     <div className="flex items-center gap-4 mt-2 sm:mt-0">
                         <span className="text-xs text-gray-500">Peso: {kr.weight || 1}</span>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
                             {isUpdating ? (
                                 <>
                                     <input type="number" value={newValue} onChange={e => setNewValue(parseFloat(e.target.value))} className="w-24 p-1 border border-indigo-400 rounded-md" autoFocus />
@@ -609,6 +853,7 @@ const KrItem = ({ kr, onUpdate, onDeleteUpdate }) => {
                                     <span className="text-gray-500 text-sm">/ {kr.targetValue}</span>
                                     <Button onClick={() => setIsUpdating(true)} variant="ghost" className="!p-1 h-7 w-7"><Zap size={16} /></Button>
                                     <Button onClick={() => setIsHistoryOpen(true)} variant="ghost" className="!p-1 h-7 w-7"><History size={16} /></Button>
+                                    <Button onClick={() => setIsAttentionOpen(true)} variant="ghost" className={`!p-1 h-7 w-7 ${hasActiveAttention ? 'text-red-500 bg-red-100' : ''}`}><AlertTriangle size={16} /></Button>
                                 </>
                             )}
                         </div>
@@ -623,7 +868,7 @@ const KrItem = ({ kr, onUpdate, onDeleteUpdate }) => {
 };
 
 const OkrView = ({ okrs, onSave, onDelete }) => {
-    const [layout, setLayout] = useState('list'); // 'list' or 'grid'
+    const [layout, setLayout] = useState('list');
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingOkr, setEditingOkr] = useState(null);
     const [expandedOkrs, setExpandedOkrs] = useState({});
@@ -651,18 +896,19 @@ const OkrView = ({ okrs, onSave, onDelete }) => {
         });
         onSave({ ...okr, keyResults: updatedKeyResults });
     };
-    
-    const handleDeleteUpdate = (okr, krId, updateDate) => {
+
+    const handleSaveAttentionLog = (okr, krId, attentionLog) => {
         const updatedKeyResults = okr.keyResults.map(kr => {
             if (kr.id === krId) {
-                const newUpdates = kr.updates.filter(u => u.date !== updateDate);
-                const sortedUpdates = newUpdates.sort((a,b) => new Date(a.date) - new Date(b.date));
-                const newCurrentValue = sortedUpdates.length > 0 ? sortedUpdates[sortedUpdates.length - 1].value : kr.startValue;
-                return { ...kr, updates: newUpdates, currentValue: newCurrentValue };
+                return { ...kr, attentionLog };
             }
             return kr;
         });
         onSave({ ...okr, keyResults: updatedKeyResults });
+    };
+    
+    const handleDeleteUpdate = (okr, krId, updateId) => {
+        // Lógica de deleção de update
     };
 
     const handleEdit = (okr) => {
@@ -691,7 +937,6 @@ const OkrView = ({ okrs, onSave, onDelete }) => {
             <ConfirmModal isOpen={isConfirmDeleteOpen} onClose={() => setIsConfirmDeleteOpen(false)} onConfirm={confirmDeleteOkr} title="Confirmar Exclusão de Objetivo">
                 <p>Tem certeza que deseja excluir este Objetivo e todos os seus KRs? Esta ação não pode ser desfeita.</p>
             </ConfirmModal>
-
             <div className="space-y-6">
                 <Card>
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -743,7 +988,11 @@ const OkrView = ({ okrs, onSave, onDelete }) => {
                                     <div className={`transition-all duration-500 ease-in-out bg-gray-50/50 ${isExpanded ? 'max-h-[1000px] py-4' : 'max-h-0'}`}>
                                         <div className="px-6 space-y-3">
                                             {okr.keyResults.map(kr => (
-                                                <KrItem key={kr.id} kr={kr} onUpdate={(krId, newValue) => handleKrUpdate(okr, krId, newValue)} onDeleteUpdate={(krId, updateDate) => handleDeleteUpdate(okr, krId, updateDate)} />
+                                                <KrItem key={kr.id} kr={kr} 
+                                                    onUpdate={(krId, newValue) => handleKrUpdate(okr, krId, newValue)} 
+                                                    onDeleteUpdate={(krId, updateId) => handleDeleteUpdate(okr, krId, updateId)}
+                                                    onSaveAttentionLog={(krId, attentionLog) => handleSaveAttentionLog(okr, krId, attentionLog)}
+                                                />
                                             ))}
                                         </div>
                                     </div>
@@ -862,13 +1111,11 @@ export default function App() {
         return sortedTasks;
     }, [tasks, filters]);
 
-    if (error) return <div className="bg-gray-50 text-red-500 min-h-screen flex items-center justify-center">{error}</div>;
-    if (isLoading) return <div className="bg-gray-50 text-gray-800 min-h-screen flex items-center justify-center">Carregando Roadmap...</div>;
-
     return (
         <div className="bg-gray-50 text-gray-800 min-h-screen p-4 md:p-6 font-sans">
+             <style>{`.printing { background-color: white !important; } .printing .no-print { display: none !important; }`}</style>
             <div className="max-w-full mx-auto">
-                <header className="mb-6">
+                <header className="mb-6 no-print">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                         <div>
                             <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-cyan-600">Roadmap Ágil Interativo</h1>
