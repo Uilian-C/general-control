@@ -164,169 +164,169 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, children }) => {
     );
 };
 
+// CORREÇÃO VINCULAÇÃO KR: Componente TaskModal foi refatorado para usar um único estado de formulário, garantindo a persistência dos dados.
 const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest }) => {
-    const [currentTask, setCurrentTask] = useState({});
+    const getInitialFormState = () => {
+        const today = new Date().toISOString().split('T')[0];
+        if (task) {
+            return {
+                title: task.title || '',
+                description: task.description || '',
+                priority: task.priority || 'Média',
+                status: task.status || 'A Fazer',
+                startDate: task.startDate || today,
+                endDate: task.endDate || today,
+                labels: task.labels || [],
+                projectTag: task.projectTag || '',
+                blockerLog: task.blockerLog || [],
+                subtasks: task.subtasks || [],
+                customColor: task.customColor || '',
+                okrLinkValue: `${task.okrLink?.okrId || ''}_${task.okrLink?.krId || ''}`
+            };
+        }
+        return {
+            title: '', description: '', priority: 'Média', status: 'A Fazer',
+            startDate: today, endDate: today, labels: [], projectTag: '',
+            blockerLog: [], subtasks: [], customColor: '', okrLinkValue: '_'
+        };
+    };
+
+    const [formState, setFormState] = useState(getInitialFormState());
     const [newProject, setNewProject] = useState('');
     const [isCreatingProject, setIsCreatingProject] = useState(false);
     const [expandedBlocker, setExpandedBlocker] = useState(null);
-    
-    const displayProjectList = useMemo(() => {
-        const projects = new Set(tasks.map(t => t.projectTag).filter(Boolean));
-        if (currentTask.projectTag && !projects.has(currentTask.projectTag)) {
-            projects.add(currentTask.projectTag);
-        }
-        return Array.from(projects).sort();
-    }, [tasks, currentTask.projectTag]);
-
-    const allLabels = useMemo(() => {
-        const labelSet = new Set();
-        tasks.forEach(task => (task.labels || []).forEach(label => labelSet.add(label)));
-        return Array.from(labelSet).sort();
-    }, [tasks]);
 
     useEffect(() => {
-        const today = new Date().toISOString().split('T')[0];
-        if (task) {
-            setCurrentTask({
-                ...task,
-                labels: task.labels || [],
-                blockerLog: task.blockerLog || [],
-                okrLink: task.okrLink || { okrId: '', krId: '' },
-                customColor: task.customColor || ''
-            });
-        } else {
-            setCurrentTask({
-                title: '', description: '', priority: 'Média', status: 'A Fazer',
-                startDate: today, endDate: today, isMilestone: false,
-                okrLink: { okrId: '', krId: '' },
-                labels: [], projectTag: '',
-                blockerLog: [],
-                customColor: ''
-            });
+        if (isOpen) {
+            setFormState(getInitialFormState());
         }
     }, [task, isOpen]);
 
+    const displayProjectList = useMemo(() => {
+        const projects = new Set(tasks.map(t => t.projectTag).filter(Boolean));
+        if (formState.projectTag && !projects.has(formState.projectTag)) {
+            projects.add(formState.projectTag);
+        }
+        return Array.from(projects).sort();
+    }, [tasks, formState.projectTag]);
+
+    const allLabels = useMemo(() => {
+        const labelSet = new Set();
+        tasks.forEach(t => (t.labels || []).forEach(label => labelSet.add(label)));
+        return Array.from(labelSet).sort();
+    }, [tasks]);
+
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
-        setCurrentTask(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
-    };
-
-    // Vinculação de KR: Lógica revisada para garantir a atualização do estado.
-    const handleOkrLinkChange = (e) => {
-        const { value } = e.target;
-        const [okrId, krId] = value.split('_');
-        const newLink = {
-            okrId: okrId || '',
-            krId: krId || ''
-        };
-        setCurrentTask(prev => ({
-            ...prev,
-            okrLink: newLink
-        }));
+        setFormState(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
     };
     
     const handleLabelsChange = (e) => {
         const labels = e.target.value.split(',').map(l => l.trim()).filter(Boolean);
-        setCurrentTask(prev => ({ ...prev, labels }));
+        setFormState(prev => ({ ...prev, labels }));
     };
     
     const handleLabelClick = (label) => {
-        const currentLabels = currentTask.labels || [];
+        const currentLabels = formState.labels || [];
         const newLabels = currentLabels.includes(label)
             ? currentLabels.filter(l => l !== label)
             : [...currentLabels, label];
-        setCurrentTask(prev => ({ ...prev, labels: newLabels }));
+        setFormState(prev => ({ ...prev, labels: newLabels }));
     };
 
     const handleProjectChange = (e) => {
         const { value } = e.target;
         if (value === '_new_') {
             setIsCreatingProject(true);
-            setCurrentTask(prev => ({ ...prev, projectTag: '' }));
+            setFormState(prev => ({ ...prev, projectTag: '' }));
         } else {
             setIsCreatingProject(false);
             setNewProject('');
-            setCurrentTask(prev => ({ ...prev, projectTag: value }));
+            setFormState(prev => ({ ...prev, projectTag: value }));
         }
     };
 
     const handleNewProjectCreate = () => {
         if (newProject.trim()) {
-            setCurrentTask(prev => ({ ...prev, projectTag: newProject.trim() }));
+            setFormState(prev => ({ ...prev, projectTag: newProject.trim() }));
             setIsCreatingProject(false);
             setNewProject('');
         }
     };
     
     const addBlocker = () => {
-        const newLog = [...(currentTask.blockerLog || []), {
+        const newLog = [...(formState.blockerLog || []), {
             id: `block_${Date.now()}`,
             blockDate: new Date().toISOString().split('T')[0],
             blockReason: '',
             unblockDate: null,
             unblockReason: ''
         }];
-        setCurrentTask(prev => ({ ...prev, blockerLog: newLog, status: 'Bloqueado' }));
+        setFormState(prev => ({ ...prev, blockerLog: newLog, status: 'Bloqueado' }));
     };
     
     const handleBlockerLogChange = (logId, field, value) => {
-        const newLog = (currentTask.blockerLog || []).map(b => {
-            if (b.id === logId) {
-                return { ...b, [field]: value };
-            }
-            return b;
-        });
-        setCurrentTask(prev => ({ ...prev, blockerLog: newLog }));
+        const newLog = (formState.blockerLog || []).map(b => 
+            b.id === logId ? { ...b, [field]: value } : b
+        );
+        setFormState(prev => ({ ...prev, blockerLog: newLog }));
     };
     
     const handleUnblock = (logId) => {
-        const newLog = (currentTask.blockerLog || []).map(b => 
+        const newLog = (formState.blockerLog || []).map(b => 
             b.id === logId ? { ...b, unblockDate: new Date().toISOString().split('T')[0] } : b
         );
         const isStillBlocked = newLog.some(b => !b.unblockDate);
-        setCurrentTask(prev => ({ ...prev, blockerLog: newLog, status: isStillBlocked ? 'Bloqueado' : 'A Fazer' }));
+        setFormState(prev => ({ ...prev, blockerLog: newLog, status: isStillBlocked ? 'Bloqueado' : 'A Fazer' }));
     };
     
     const handleSubtaskChange = (index, field, value) => {
-        const newSubtasks = [...(currentTask.subtasks || [])];
-        newSubtasks[index][field] = value;
-        setCurrentTask(prev => ({ ...prev, subtasks: newSubtasks }));
+        const newSubtasks = [...(formState.subtasks || [])];
+        newSubtasks[index] = { ...newSubtasks[index], [field]: value };
+        setFormState(prev => ({ ...prev, subtasks: newSubtasks }));
     };
 
     const addSubtask = () => {
         const newSubtask = { id: `sub_${Date.now()}`, text: '', completed: false, targetDate: '' };
-        setCurrentTask(prev => ({ ...prev, subtasks: [...(prev.subtasks || []), newSubtask] }));
+        setFormState(prev => ({ ...prev, subtasks: [...(prev.subtasks || []), newSubtask] }));
     };
 
     const removeSubtask = (index) => {
-        const newSubtasks = (currentTask.subtasks || []).filter((_, i) => i !== index);
-        setCurrentTask(prev => ({ ...prev, subtasks: newSubtasks }));
+        const newSubtasks = (formState.subtasks || []).filter((_, i) => i !== index);
+        setFormState(prev => ({ ...prev, subtasks: newSubtasks }));
     };
     
     const handleColorChange = (color) => {
-        setCurrentTask(prev => ({...prev, customColor: color}));
+        setFormState(prev => ({...prev, customColor: color}));
     };
 
     const handleSave = () => {
-        onSave(currentTask);
+        const { okrLinkValue, ...restOfForm } = formState;
+        const [okrId, krId] = (okrLinkValue || '_').split('_');
+        
+        const taskToSave = {
+            id: task?.id, // Mantém o ID original da tarefa para atualização
+            ...restOfForm,
+            okrLink: { okrId: okrId || '', krId: krId || '' }
+        };
+
+        onSave(taskToSave);
         onClose();
     };
 
     if (!isOpen) return null;
-    
-    const okrLinkValue = `${currentTask.okrLink?.okrId || ''}_${currentTask.okrLink?.krId || ''}`;
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={task?.humanId ? `Editar Tarefa [${task.humanId}]` : "Nova Tarefa"} size="4xl">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 <div className="md:col-span-2 space-y-6">
-                    <input type="text" name="title" value={currentTask.title || ''} onChange={handleChange} placeholder="Título da Tarefa" className="w-full p-2 bg-transparent text-2xl font-bold border-b-2 border-gray-200 focus:border-indigo-500 focus:outline-none" />
-                    <textarea name="description" value={currentTask.description || ''} onChange={handleChange} placeholder="Adicione uma descrição..." className="w-full p-2 bg-gray-50 rounded-md h-32 border border-gray-200 focus:border-indigo-500 focus:outline-none"></textarea>
+                    <input type="text" name="title" value={formState.title} onChange={handleChange} placeholder="Título da Tarefa" className="w-full p-2 bg-transparent text-2xl font-bold border-b-2 border-gray-200 focus:border-indigo-500 focus:outline-none" />
+                    <textarea name="description" value={formState.description} onChange={handleChange} placeholder="Adicione uma descrição..." className="w-full p-2 bg-gray-50 rounded-md h-32 border border-gray-200 focus:border-indigo-500 focus:outline-none"></textarea>
                     
                     <div>
                         <h3 className="font-semibold mb-2">Subtarefas</h3>
                         <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                             {(currentTask.subtasks || []).map((sub, index) => (
+                             {(formState.subtasks || []).map((sub, index) => (
                                 <div key={sub.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-md">
                                     <input type="checkbox" checked={sub.completed} onChange={(e) => handleSubtaskChange(index, 'completed', e.target.checked)} className="h-5 w-5 rounded text-indigo-600" />
                                     <input type="text" value={sub.text} onChange={(e) => handleSubtaskChange(index, 'text', e.target.value)} className={`flex-grow p-1 bg-transparent border-b ${sub.completed ? 'line-through text-gray-500' : ''}`} placeholder="Descrição da subtarefa"/>
@@ -341,13 +341,12 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
                     <div>
                         <h3 className="font-semibold mb-2">Histórico de Bloqueios</h3>
                         <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                            {(currentTask.blockerLog || []).map(log => (
+                            {(formState.blockerLog || []).map(log => (
                                 <div key={log.id} className="p-3 bg-gray-50 rounded-md border border-gray-200" >
                                     <div className="flex justify-between items-center cursor-pointer" onClick={() => setExpandedBlocker(expandedBlocker === log.id ? null : log.id)}>
                                         <p className={`font-semibold ${log.unblockDate ? 'text-green-600' : 'text-red-600'}`}>{log.unblockDate ? 'Desbloqueado' : 'Bloqueado'} em {formatDate(log.blockDate, false)}</p>
                                         <ChevronDown size={16} className={`transition-transform ${expandedBlocker === log.id ? 'rotate-180' : ''}`} />
                                     </div>
-                                    {/* AJUSTE 3: Adicionado stopPropagation para evitar que o clique no conteúdo feche o acordeão */}
                                     {expandedBlocker === log.id && (
                                         <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
                                             <div>
@@ -372,27 +371,27 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
                 <div className="md:col-span-1 space-y-4 bg-gray-50 p-4 rounded-lg">
                     <div className="space-y-1">
                         <label className="block text-sm font-medium text-gray-600">Status</label>
-                        <select name="status" value={currentTask.status || 'A Fazer'} onChange={handleChange} disabled={(currentTask.blockerLog || []).some(b => !b.unblockDate)} className="w-full p-2 border border-gray-300 rounded-md">
+                        <select name="status" value={formState.status} onChange={handleChange} disabled={(formState.blockerLog || []).some(b => !b.unblockDate)} className="w-full p-2 border border-gray-300 rounded-md">
                             {Object.keys(STATUSES).map(s => <option key={s} value={s}>{STATUSES[s].label}</option>)}
                         </select>
                     </div>
                      <div className="space-y-1">
                         <label className="block text-sm font-medium text-gray-600">Datas</label>
                         <div className="space-y-2">
-                            <input type="date" name="startDate" value={currentTask.startDate || ''} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-md" />
-                            <input type="date" name="endDate" value={currentTask.endDate || ''} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-md" />
+                            <input type="date" name="startDate" value={formState.startDate} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-md" />
+                            <input type="date" name="endDate" value={formState.endDate} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-md" />
                         </div>
                     </div>
                     <div className="space-y-1">
                         <label className="block text-sm font-medium text-gray-600">Prioridade</label>
-                        <select name="priority" value={currentTask.priority || 'Média'} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-md">
+                        <select name="priority" value={formState.priority} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-md">
                             {Object.keys(PRIORITIES).map(p => <option key={p} value={p}>{PRIORITIES[p].label}</option>)}
                         </select>
                     </div>
                      <div className="space-y-1">
                         <label className="block text-sm font-medium text-gray-600">Projeto</label>
                         {!isCreatingProject ? (
-                            <select value={currentTask.projectTag || ''} onChange={handleProjectChange} className="w-full p-2 border border-gray-300 rounded-md">
+                            <select name="projectTag" value={formState.projectTag} onChange={handleProjectChange} className="w-full p-2 border border-gray-300 rounded-md">
                                 <option value="">Nenhum</option>
                                 {displayProjectList.map(p => <option key={p} value={p}>{p}</option>)}
                                 <option value="_new_">-- Criar Novo Projeto --</option>
@@ -406,16 +405,16 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
                     </div>
                      <div className="space-y-1">
                         <label className="block text-sm font-medium text-gray-600">Etiquetas</label>
-                        <input type="text" value={(currentTask.labels || []).join(', ')} onChange={handleLabelsChange} className="w-full p-2 border border-gray-300 rounded-md" placeholder="Ex: UX, Backend, Marketing" />
+                        <input type="text" value={(formState.labels || []).join(', ')} onChange={handleLabelsChange} className="w-full p-2 border border-gray-300 rounded-md" placeholder="Ex: UX, Backend, Marketing" />
                         <div className="flex flex-wrap gap-2 mt-2">
                             {allLabels.map(label => (
-                                <button key={label} onClick={() => handleLabelClick(label)} className={`px-2 py-1 text-xs rounded-full ${ (currentTask.labels || []).includes(label) ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>{label}</button>
+                                <button key={label} onClick={() => handleLabelClick(label)} className={`px-2 py-1 text-xs rounded-full ${ (formState.labels || []).includes(label) ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>{label}</button>
                             ))}
                         </div>
                     </div>
                      <div className="space-y-1">
                         <label className="block text-sm font-medium text-gray-600">Vincular ao OKR</label>
-                        <select value={okrLinkValue} onChange={handleOkrLinkChange} className="w-full p-2 border border-gray-300 rounded-md">
+                        <select name="okrLinkValue" value={formState.okrLinkValue} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-md">
                             <option value="_">Nenhum</option>
                             {okrs.map(okr => (
                                 <optgroup key={okr.id} label={okr.objective}>
@@ -430,7 +429,7 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
                         <div className="flex gap-2">
                              {TASK_COLORS.map(color => (
                                 <button key={color} onClick={() => handleColorChange(color)} className="w-6 h-6 rounded-full transition-transform hover:scale-110" style={{backgroundColor: color}}>
-                                    {currentTask.customColor === color && <Check size={16} className="text-white m-auto"/>}
+                                    {formState.customColor === color && <Check size={16} className="text-white m-auto"/>}
                                 </button>
                             ))}
                         </div>
@@ -603,7 +602,6 @@ const Timeline = ({ tasks, onTaskClick, zoomLevel, viewStartDate }) => {
     );
 };
 
-// AJUSTE 1: Filtro de lista padronizado
 const FilterList = ({ title, options, active, onFilterChange }) => (
     <div className="flex items-center gap-2">
         <label htmlFor={`filter-${title}`} className="text-sm font-medium text-gray-600">{title}:</label>
@@ -645,7 +643,6 @@ const WorkspaceView = ({ tasks, onTaskClick, filters, setFilters, zoomLevel, set
                             <button onClick={() => setZoomLevel(z => Math.min(10, z + 1))} className="p-2 rounded-full hover:bg-gray-200 transition-colors"><ZoomIn size={20} /></button>
                         </div>
                     </div>
-                     {/* AJUSTE 1: Filtros padronizados para o formato de lista (dropdown) */}
                      <div className="flex flex-wrap justify-start items-center gap-4 border-t pt-4 mt-2">
                         <FilterList title="Prioridade" options={PRIORITIES} active={filters.priority} onFilterChange={val => setFilters({...filters, priority: val})}/>
                         <FilterList title="Status" options={STATUSES} active={filters.status} onFilterChange={val => setFilters({...filters, status: val})}/>
@@ -1250,7 +1247,6 @@ export default function App() {
     const [view, setView] = useState('workspace');
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState(null);
-    // AJUSTE 1: Estado do filtro de etiquetas alterado para string
     const [filters, setFilters] = useState({ priority: 'Todos', status: 'Todos', label: 'Todos' });
     const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
     const [itemToDelete, setItemToDelete] = useState(null);
@@ -1341,7 +1337,6 @@ export default function App() {
         return tasks.filter(task => {
             const statusMatch = filters.status === 'Todos' || task.status === filters.status;
             const priorityMatch = filters.priority === 'Todos' || task.priority === filters.priority;
-            // AJUSTE 1: Lógica de filtro de etiqueta atualizada para string
             const labelMatch = filters.label === 'Todos' || (task.labels && task.labels.includes(filters.label));
             return statusMatch && priorityMatch && labelMatch;
         }).sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
