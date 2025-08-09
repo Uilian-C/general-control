@@ -164,7 +164,6 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, children }) => {
     );
 };
 
-// CORREÇÃO VINCULAÇÃO KR: Componente TaskModal foi refatorado para usar um único estado de formulário, garantindo a persistência dos dados.
 const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest }) => {
     const getInitialFormState = () => {
         const today = new Date().toISOString().split('T')[0];
@@ -181,13 +180,14 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
                 blockerLog: task.blockerLog || [],
                 subtasks: task.subtasks || [],
                 customColor: task.customColor || '',
-                okrLinkValue: `${task.okrLink?.okrId || ''}_${task.okrLink?.krId || ''}`
+                // CORREÇÃO ESTRUTURAL: Usa '|' como separador para evitar conflito com IDs que contêm '_'
+                okrLinkValue: `${task.okrLink?.okrId || ''}|${task.okrLink?.krId || ''}`
             };
         }
         return {
             title: '', description: '', priority: 'Média', status: 'A Fazer',
             startDate: today, endDate: today, labels: [], projectTag: '',
-            blockerLog: [], subtasks: [], customColor: '', okrLinkValue: '_'
+            blockerLog: [], subtasks: [], customColor: '', okrLinkValue: '|'
         };
     };
 
@@ -302,10 +302,11 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
 
     const handleSave = () => {
         const { okrLinkValue, ...restOfForm } = formState;
-        const [okrId, krId] = (okrLinkValue || '_').split('_');
+        // CORREÇÃO ESTRUTURAL: Usa '|' como separador
+        const [okrId, krId] = (okrLinkValue || '|').split('|');
         
         const taskToSave = {
-            id: task?.id, // Mantém o ID original da tarefa para atualização
+            id: task?.id,
             ...restOfForm,
             okrLink: { okrId: okrId || '', krId: krId || '' }
         };
@@ -415,11 +416,12 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
                      <div className="space-y-1">
                         <label className="block text-sm font-medium text-gray-600">Vincular ao OKR</label>
                         <select name="okrLinkValue" value={formState.okrLinkValue} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-md">
-                            <option value="_">Nenhum</option>
+                            <option value="|">Nenhum</option>
                             {okrs.map(okr => (
                                 <optgroup key={okr.id} label={okr.objective}>
-                                    <option key={`${okr.id}_general`} value={`${okr.id}_`}>-- Objetivo Geral --</option>
-                                    {(okr.keyResults || []).map(kr => <option key={`${okr.id}_${kr.id}`} value={`${okr.id}_${kr.id}`}>{kr.text}</option>)}
+                                    {/* CORREÇÃO ESTRUTURAL: Usa '|' como separador */}
+                                    <option key={`${okr.id}_general`} value={`${okr.id}|`}>-- Objetivo Geral --</option>
+                                    {(okr.keyResults || []).map(kr => <option key={`${okr.id}|${kr.id}`} value={`${okr.id}|${kr.id}`}>{kr.text}</option>)}
                                 </optgroup>
                             ))}
                         </select>
@@ -1293,12 +1295,29 @@ export default function App() {
 
     const handleSaveTask = async (taskData) => {
         const collectionPath = `artifacts/${appId}/public/data/roadmap_tasks`;
+
+        const dataForFirestore = {
+            title: taskData.title,
+            description: taskData.description,
+            priority: taskData.priority,
+            status: taskData.status,
+            startDate: taskData.startDate,
+            endDate: taskData.endDate,
+            labels: taskData.labels,
+            projectTag: taskData.projectTag,
+            blockerLog: taskData.blockerLog,
+            subtasks: taskData.subtasks,
+            customColor: taskData.customColor,
+            okrLink: taskData.okrLink
+        };
+
         if (taskData.id) {
-            const { id, ...dataToUpdate } = taskData;
-            await updateDoc(doc(db, collectionPath, id), dataToUpdate);
+            const docRef = doc(db, collectionPath, taskData.id);
+            await updateDoc(docRef, dataForFirestore);
         } else {
-            const newTask = { ...taskData, createdAt: serverTimestamp(), humanId: `${Math.random().toString(36).substring(2, 6).toUpperCase()}` };
-            await addDoc(collection(db, collectionPath), newTask);
+            dataForFirestore.createdAt = serverTimestamp();
+            dataForFirestore.humanId = `${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+            await addDoc(collection(db, collectionPath), dataForFirestore);
         }
     };
 
