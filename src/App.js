@@ -180,7 +180,6 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
                 blockerLog: task.blockerLog || [],
                 subtasks: task.subtasks || [],
                 customColor: task.customColor || '',
-                // CORREÇÃO ESTRUTURAL: Usa '|' como separador para evitar conflito com IDs que contêm '_'
                 okrLinkValue: `${task.okrLink?.okrId || ''}|${task.okrLink?.krId || ''}`
             };
         }
@@ -302,7 +301,6 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
 
     const handleSave = () => {
         const { okrLinkValue, ...restOfForm } = formState;
-        // CORREÇÃO ESTRUTURAL: Usa '|' como separador
         const [okrId, krId] = (okrLinkValue || '|').split('|');
         
         const taskToSave = {
@@ -419,7 +417,6 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
                             <option value="|">Nenhum</option>
                             {okrs.map(okr => (
                                 <optgroup key={okr.id} label={okr.objective}>
-                                    {/* CORREÇÃO ESTRUTURAL: Usa '|' como separador */}
                                     <option key={`${okr.id}_general`} value={`${okr.id}|`}>-- Objetivo Geral --</option>
                                     {(okr.keyResults || []).map(kr => <option key={`${okr.id}|${kr.id}`} value={`${okr.id}|${kr.id}`}>{kr.text}</option>)}
                                 </optgroup>
@@ -460,15 +457,34 @@ const Timeline = ({ tasks, onTaskClick, zoomLevel, viewStartDate }) => {
     const dayWidth = useMemo(() => 20 + (zoomLevel * 4), [zoomLevel]);
     
     const { days, timelineWidth, headerGroups, todayPosition } = useMemo(() => {
-        const end = new Date(viewStartDate);
-        end.setDate(end.getDate() + 45); // Fixed number of days for simplicity
-        const days = getDaysInView(viewStartDate, end);
+        let maxEndDate = null;
+        if (tasks && tasks.length > 0) {
+            const validEndDates = tasks
+                .map(task => new Date(task.endDate))
+                .filter(date => !isNaN(date.getTime()));
+            
+            if (validEndDates.length > 0) {
+                maxEndDate = new Date(Math.max.apply(null, validEndDates));
+            }
+        }
+
+        const defaultEndDate = new Date(viewStartDate);
+        defaultEndDate.setDate(defaultEndDate.getDate() + 45);
+
+        let timelineEndDate = defaultEndDate;
+        if (maxEndDate && maxEndDate > defaultEndDate) {
+            timelineEndDate = new Date(maxEndDate);
+        }
+        
+        timelineEndDate.setDate(timelineEndDate.getDate() + 15);
+
+        const days = getDaysInView(viewStartDate, timelineEndDate);
         const timelineWidth = days.length * dayWidth;
         
         const groups = [];
         if (days.length > 0) {
             let currentGroup = null;
-            if (dayWidth < 25) { // Group by month
+            if (dayWidth < 25) { 
                 days.forEach(day => {
                     const monthKey = `${day.getFullYear()}-${day.getMonth()}`;
                     if (!currentGroup || currentGroup.key !== monthKey) {
@@ -477,7 +493,7 @@ const Timeline = ({ tasks, onTaskClick, zoomLevel, viewStartDate }) => {
                     }
                     currentGroup.width += dayWidth;
                 });
-            } else if (dayWidth < 50) { // Group by week
+            } else if (dayWidth < 50) { 
                 days.forEach(day => {
                     const year = day.getFullYear();
                     const weekNumber = Math.ceil((((day - new Date(year, 0, 1)) / 86400000) + new Date(year, 0, 1).getDay() + 1) / 7);
@@ -488,17 +504,17 @@ const Timeline = ({ tasks, onTaskClick, zoomLevel, viewStartDate }) => {
                     }
                     currentGroup.width += dayWidth;
                 });
-            } else { // Group by day
+            } else { 
                 days.forEach(day => {
                     groups.push({ key: day.toISOString(), label: day.getDate(), subLabel: new Intl.DateTimeFormat('pt-BR', { weekday: 'short', timeZone: 'UTC' }).format(day).slice(0, 3), width: dayWidth, isToday: day.toDateString() === today.toDateString() });
                 });
             }
         }
         
-        const todayPos = (today.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24) * dayWidth;
+        const todayPos = (today.getTime() - new Date(viewStartDate).setUTCHours(0,0,0,0)) / (1000 * 60 * 60 * 24) * dayWidth;
         
         return { days, timelineWidth, headerGroups: groups, todayPosition: todayPos };
-    }, [viewStartDate, dayWidth]);
+    }, [viewStartDate, dayWidth, tasks]);
 
     const onMouseDown = (e) => {
         if (!timelineRef.current) return;
@@ -540,7 +556,7 @@ const Timeline = ({ tasks, onTaskClick, zoomLevel, viewStartDate }) => {
                 <div style={{ width: timelineWidth }} className="relative">
                     <div className="sticky top-0 z-20 bg-gray-50 h-12">
                         <div className="flex border-b-2 border-gray-200">
-                             {headerGroups.map((group) => (<div key={group.key} className="flex-shrink-0 text-center font-semibold text-gray-700 border-r border-gray-200 py-1 flex flex-col justify-center items-center" style={{ width: group.width }}><span className={`text-xs ${group.isToday ? 'text-indigo-600' : 'text-gray-500'}`}>{group.subLabel}</span><span className={`whitespace-nowrap ${group.isToday ? 'text-indigo-600 font-bold' : ''}`}>{group.label}</span></div>))}
+                             {Array.isArray(headerGroups) && headerGroups.map((group) => (<div key={group.key} className="flex-shrink-0 text-center font-semibold text-gray-700 border-r border-gray-200 py-1 flex flex-col justify-center items-center" style={{ width: group.width }}><span className={`text-xs ${group.isToday ? 'text-indigo-600' : 'text-gray-500'}`}>{group.subLabel}</span><span className={`whitespace-nowrap ${group.isToday ? 'text-indigo-600 font-bold' : ''}`}>{group.label}</span></div>))}
                         </div>
                     </div>
                     <div className="absolute top-0 left-0 w-full h-full z-0">
@@ -559,8 +575,8 @@ const Timeline = ({ tasks, onTaskClick, zoomLevel, viewStartDate }) => {
                                         <div className="relative" style={{ height: groupedTasks[group].length * 48 + 10 }}>
                                             {groupedTasks[group].map((task, taskIndex) => {
                                                 const taskStart = new Date(task.startDate); taskStart.setUTCHours(0, 0, 0, 0); const taskEnd = new Date(task.endDate); taskEnd.setUTCHours(0, 0, 0, 0);
-                                                if (taskEnd < viewStartDate || taskStart > new Date(viewStartDate).setDate(viewStartDate.getDate() + 45)) return null;
-                                                const startOffset = (taskStart.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24); const duration = Math.max(1, (taskEnd.getTime() - taskStart.getTime()) / (1000 * 60 * 60 * 24) + 1); const left = startOffset * dayWidth; const width = duration * dayWidth - 4;
+                                                if (!task.startDate || !task.endDate || taskEnd < viewStartDate || taskStart > new Date(viewStartDate).setDate(viewStartDate.getDate() + days.length)) return null;
+                                                const startOffset = (taskStart.getTime() - new Date(viewStartDate).setUTCHours(0,0,0,0)) / (1000 * 60 * 60 * 24); const duration = Math.max(1, (taskEnd.getTime() - taskStart.getTime()) / (1000 * 60 * 60 * 24) + 1); const left = startOffset * dayWidth; const width = duration * dayWidth - 4;
                                                 const progress = calculateTaskProgress(task);
                                                 const daysRemaining = Math.ceil((taskEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
                                                 
