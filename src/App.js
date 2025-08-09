@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, serverTimestamp } from 'firebase/firestore';
-import { Target, Flag, Plus, Trash2, X, Layers, Briefcase, Edit, Settings, Tag, Palette, TrendingUp, Download, Calendar, ListTodo, ZoomIn, ZoomOut, ChevronsUpDown, CheckCircle, MoreVertical, History, Check, Zap, ChevronDown, LayoutGrid, List, AlertTriangle, Clock, TrendingUp as TrendingUpIcon, Lock, Unlock } from 'lucide-react';
+import { Target, Layers, Briefcase, Edit, Plus, Trash2, X, Settings, Tag, Palette, TrendingUp, Download, Calendar, ListTodo, ZoomIn, ZoomOut, ChevronsUpDown, CheckCircle, MoreVertical, History, Check, Zap, ChevronDown, LayoutGrid, List, AlertTriangle, Clock, TrendingUp as TrendingUpIcon, Lock, Unlock } from 'lucide-react';
 
 // --- ATENÇÃO: Para a funcionalidade de exportar PDF funcionar ---
 // Adicione estas duas linhas no <head> do seu arquivo HTML principal (ex: index.html)
@@ -113,7 +113,6 @@ const getTaskDurationInDays = (task) => {
     return Math.max(1, duration + 1);
 };
 
-
 // --- Componentes da UI ---
 const Card = ({ children, className = '', ...props }) => (
     <div className={`bg-white border border-gray-200 rounded-xl p-6 shadow-sm ${className}`} {...props}>
@@ -212,9 +211,18 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
         setCurrentTask(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
     };
 
+    // Vinculação de KR: Lógica revisada para garantir a atualização do estado.
     const handleOkrLinkChange = (e) => {
-        const [okrId, krId] = e.target.value.split('_');
-        setCurrentTask(prev => ({ ...prev, okrLink: { okrId, krId: krId || '' } }));
+        const { value } = e.target;
+        const [okrId, krId] = value.split('_');
+        const newLink = {
+            okrId: okrId || '',
+            krId: krId || ''
+        };
+        setCurrentTask(prev => ({
+            ...prev,
+            okrLink: newLink
+        }));
     };
     
     const handleLabelsChange = (e) => {
@@ -306,6 +314,8 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
 
     if (!isOpen) return null;
     
+    const okrLinkValue = `${currentTask.okrLink?.okrId || ''}_${currentTask.okrLink?.krId || ''}`;
+
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={task?.humanId ? `Editar Tarefa [${task.humanId}]` : "Nova Tarefa"} size="4xl">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -332,13 +342,14 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
                         <h3 className="font-semibold mb-2">Histórico de Bloqueios</h3>
                         <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
                             {(currentTask.blockerLog || []).map(log => (
-                                <div key={log.id} className="p-3 bg-gray-50 rounded-md border border-gray-200 cursor-pointer" onClick={() => setExpandedBlocker(expandedBlocker === log.id ? null : log.id)}>
-                                    <div className="flex justify-between items-center">
+                                <div key={log.id} className="p-3 bg-gray-50 rounded-md border border-gray-200" >
+                                    <div className="flex justify-between items-center cursor-pointer" onClick={() => setExpandedBlocker(expandedBlocker === log.id ? null : log.id)}>
                                         <p className={`font-semibold ${log.unblockDate ? 'text-green-600' : 'text-red-600'}`}>{log.unblockDate ? 'Desbloqueado' : 'Bloqueado'} em {formatDate(log.blockDate, false)}</p>
                                         <ChevronDown size={16} className={`transition-transform ${expandedBlocker === log.id ? 'rotate-180' : ''}`} />
                                     </div>
+                                    {/* AJUSTE 3: Adicionado stopPropagation para evitar que o clique no conteúdo feche o acordeão */}
                                     {expandedBlocker === log.id && (
-                                        <div className="mt-2 space-y-2">
+                                        <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
                                             <div>
                                                 <label className="text-xs font-medium text-gray-500">Motivo do Bloqueio</label>
                                                 <textarea value={log.blockReason} onChange={e => handleBlockerLogChange(log.id, 'blockReason', e.target.value)} className="w-full p-1 border rounded-md text-sm h-16"></textarea>
@@ -358,7 +369,6 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
                         <Button onClick={addBlocker} variant="secondary" className="mt-2 text-sm">Adicionar Bloqueio</Button>
                     </div>
                 </div>
-
                 <div className="md:col-span-1 space-y-4 bg-gray-50 p-4 rounded-lg">
                     <div className="space-y-1">
                         <label className="block text-sm font-medium text-gray-600">Status</label>
@@ -405,12 +415,12 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
                     </div>
                      <div className="space-y-1">
                         <label className="block text-sm font-medium text-gray-600">Vincular ao OKR</label>
-                        <select value={`${currentTask.okrLink?.okrId || ''}_${currentTask.okrLink?.krId || ''}`} onChange={handleOkrLinkChange} className="w-full p-2 border border-gray-300 rounded-md">
+                        <select value={okrLinkValue} onChange={handleOkrLinkChange} className="w-full p-2 border border-gray-300 rounded-md">
                             <option value="_">Nenhum</option>
                             {okrs.map(okr => (
                                 <optgroup key={okr.id} label={okr.objective}>
-                                    <option value={`${okr.id}_`}>-- Objetivo Geral --</option>
-                                    {(okr.keyResults || []).map(kr => <option key={kr.id} value={`${okr.id}_${kr.id}`}>{kr.text}</option>)}
+                                    <option key={`${okr.id}_general`} value={`${okr.id}_`}>-- Objetivo Geral --</option>
+                                    {(okr.keyResults || []).map(kr => <option key={`${okr.id}_${kr.id}`} value={`${okr.id}_${kr.id}`}>{kr.text}</option>)}
                                 </optgroup>
                             ))}
                         </select>
@@ -529,7 +539,7 @@ const Timeline = ({ tasks, onTaskClick, zoomLevel, viewStartDate }) => {
                 <div style={{ width: timelineWidth }} className="relative">
                     <div className="sticky top-0 z-20 bg-gray-50 h-12">
                         <div className="flex border-b-2 border-gray-200">
-                             {headerGroups.map((group) => (<div key={group.key} className="flex-shrink-0 text-center font-semibold text-gray-700 border-r border-gray-200 py-1 flex flex-col justify-center items-center" style={{ width: group.width }}>{group.subLabel && <span className={`text-xs ${group.isToday ? 'text-indigo-600' : 'text-gray-500'}`}>{group.subLabel}</span>}<span className={`whitespace-nowrap ${group.isToday ? 'text-indigo-600 font-bold' : ''}`}>{group.label}</span></div>))}
+                             {headerGroups.map((group) => (<div key={group.key} className="flex-shrink-0 text-center font-semibold text-gray-700 border-r border-gray-200 py-1 flex flex-col justify-center items-center" style={{ width: group.width }}><span className={`text-xs ${group.isToday ? 'text-indigo-600' : 'text-gray-500'}`}>{group.subLabel}</span><span className={`whitespace-nowrap ${group.isToday ? 'text-indigo-600 font-bold' : ''}`}>{group.label}</span></div>))}
                         </div>
                     </div>
                     <div className="absolute top-0 left-0 w-full h-full z-0">
@@ -593,51 +603,24 @@ const Timeline = ({ tasks, onTaskClick, zoomLevel, viewStartDate }) => {
     );
 };
 
-const FilterGroup = ({ title, options, active, onFilterChange, isMultiSelect = false, activeFilters = [] }) => {
-    const allLabels = Object.keys(options);
+// AJUSTE 1: Filtro de lista padronizado
+const FilterList = ({ title, options, active, onFilterChange }) => (
+    <div className="flex items-center gap-2">
+        <label htmlFor={`filter-${title}`} className="text-sm font-medium text-gray-600">{title}:</label>
+        <select
+            id={`filter-${title}`}
+            value={active}
+            onChange={(e) => onFilterChange(e.target.value)}
+            className="p-2 border border-gray-300 rounded-md bg-white shadow-sm focus:ring-indigo-500 focus:border-indigo-500 min-w-[150px]"
+        >
+            <option value="Todos">Todos</option>
+            {Object.keys(options).map(key => (
+                <option key={key} value={key}>{options[key].label}</option>
+            ))}
+        </select>
+    </div>
+);
 
-    if (isMultiSelect) {
-        return (
-            <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-medium text-gray-600">{title}:</span>
-                <div className="flex items-center gap-2 rounded-lg bg-gray-100 p-1">
-                    {allLabels.map(key => (
-                        <button
-                            key={key}
-                            onClick={() => onFilterChange(key)}
-                            className={`px-3 py-1 text-sm rounded-md transition-colors ${activeFilters.includes(key) ? 'bg-indigo-600 shadow-sm text-white font-semibold' : 'text-gray-600 hover:bg-gray-200'}`}
-                        >
-                            {options[key].label}
-                        </button>
-                    ))}
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium text-gray-600">{title}:</span>
-            <div className="flex items-center gap-2 rounded-lg bg-gray-100 p-1">
-                <button
-                    onClick={() => onFilterChange('Todos')}
-                    className={`px-3 py-1 text-sm rounded-md transition-colors ${active === 'Todos' ? 'bg-white shadow-sm text-indigo-600 font-semibold' : 'text-gray-600 hover:bg-gray-200'}`}
-                >
-                    Todos
-                </button>
-                {allLabels.map(key => (
-                    <button
-                        key={key}
-                        onClick={() => onFilterChange(key)}
-                        className={`px-3 py-1 text-sm rounded-md transition-colors ${active === key ? 'bg-white shadow-sm text-indigo-600 font-semibold' : 'text-gray-600 hover:bg-gray-200'}`}
-                    >
-                        {options[key].label}
-                    </button>
-                ))}
-            </div>
-        </div>
-    );
-};
 
 const WorkspaceView = ({ tasks, onTaskClick, filters, setFilters, zoomLevel, setZoomLevel, viewStartDate, setViewStartDate, onOpenTaskModal }) => {
     const allLabels = useMemo(() => {
@@ -649,14 +632,6 @@ const WorkspaceView = ({ tasks, onTaskClick, filters, setFilters, zoomLevel, set
         });
         return labelOptions;
     }, [tasks]);
-
-    const handleLabelFilterChange = (label) => {
-        const currentLabels = filters.labels || [];
-        const newLabels = currentLabels.includes(label)
-            ? currentLabels.filter(l => l !== label)
-            : [...currentLabels, label];
-        setFilters({ ...filters, labels: newLabels });
-    };
 
     return (
         <div className="space-y-6">
@@ -670,11 +645,12 @@ const WorkspaceView = ({ tasks, onTaskClick, filters, setFilters, zoomLevel, set
                             <button onClick={() => setZoomLevel(z => Math.min(10, z + 1))} className="p-2 rounded-full hover:bg-gray-200 transition-colors"><ZoomIn size={20} /></button>
                         </div>
                     </div>
-                     <div className="flex flex-wrap justify-start items-center gap-4">
-                        <FilterGroup title="Prioridade" options={PRIORITIES} active={filters.priority} onFilterChange={val => setFilters({...filters, priority: val})}/>
-                        <FilterGroup title="Status" options={STATUSES} active={filters.status} onFilterChange={val => setFilters({...filters, status: val})}/>
+                     {/* AJUSTE 1: Filtros padronizados para o formato de lista (dropdown) */}
+                     <div className="flex flex-wrap justify-start items-center gap-4 border-t pt-4 mt-2">
+                        <FilterList title="Prioridade" options={PRIORITIES} active={filters.priority} onFilterChange={val => setFilters({...filters, priority: val})}/>
+                        <FilterList title="Status" options={STATUSES} active={filters.status} onFilterChange={val => setFilters({...filters, status: val})}/>
                         {Object.keys(allLabels).length > 0 && (
-                            <FilterGroup title="Etiquetas" options={allLabels} isMultiSelect activeFilters={filters.labels || []} onFilterChange={handleLabelFilterChange}/>
+                             <FilterList title="Etiqueta" options={allLabels} active={filters.label} onFilterChange={val => setFilters({...filters, label: val})}/>
                         )}
                     </div>
                 </div>
@@ -687,8 +663,7 @@ const WorkspaceView = ({ tasks, onTaskClick, filters, setFilters, zoomLevel, set
     );
 };
 
-// --- NOVA VISÃO EXECUTIVA (REFORMULADA) ---
-
+// --- VISÃO EXECUTIVA (REFORMULADA) ---
 const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
     const executiveViewRef = useRef(null);
     const [nextStepsPriority, setNextStepsPriority] = useState('Alta');
@@ -697,6 +672,7 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
         overallRoadmapProgress,
         overallOkrProgress,
         projectStatusSummary,
+        projectProgressSummary, 
         okrsWithProgress,
         attentionPoints,
         nextSteps
@@ -714,7 +690,7 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
         const overallProgress = roadmapMetrics.totalDuration > 0
             ? Math.round(roadmapMetrics.totalWeightedProgress / roadmapMetrics.totalDuration)
             : 0;
-
+            
         const projects = tasks.reduce((acc, task) => {
             const tag = task.projectTag || 'Sem Projeto';
             if (!acc[tag]) acc[tag] = { tasks: [] };
@@ -723,12 +699,20 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
         }, {});
         
         const statusSummary = Object.keys(projects).map(tag => {
-            const statusCounts = projects[tag].tasks.reduce((counts, task) => {
+            const projectTasks = projects[tag].tasks;
+            const statusCounts = projectTasks.reduce((counts, task) => {
                 counts[task.status] = (counts[task.status] || 0) + 1;
                 return counts;
             }, {});
-            return { name: tag, ...statusCounts };
+            return { name: tag, tasksCount: projectTasks.length, ...statusCounts };
         });
+
+        const progressSummary = Object.keys(projects).map(tag => {
+            const projectTasks = projects[tag].tasks;
+            if (projectTasks.length === 0) return { name: tag, progress: 0 };
+            const totalProgress = projectTasks.reduce((sum, task) => sum + calculateTaskProgress(task), 0);
+            return { name: tag, progress: Math.round(totalProgress / projectTasks.length) };
+        }).sort((a,b) => a.progress - b.progress);
 
         const okrsDetails = okrs.map(okr => ({
             ...okr,
@@ -737,10 +721,9 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
         
         const totalOkrProgress = okrsDetails.reduce((sum, okr) => sum + okr.progress, 0);
         const avgOkrProgress = okrs.length > 0 ? Math.round(totalOkrProgress / okrs.length) : 0;
-
+        
         const attention = [];
         const next = [];
-
         tasks.forEach(task => {
             const isOverdue = new Date(task.endDate) < today && task.status !== 'Concluído';
             if (task.priority === 'Alta' && isOverdue) {
@@ -765,6 +748,7 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
             overallRoadmapProgress: overallProgress,
             overallOkrProgress: avgOkrProgress,
             projectStatusSummary: statusSummary,
+            projectProgressSummary: progressSummary,
             okrsWithProgress: okrsDetails,
             attentionPoints: attention.slice(0, 5),
             nextSteps: next.sort((a,b) => new Date(a.date) - new Date(b.date)).slice(0, 5)
@@ -774,7 +758,6 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
     const handleResolveAttention = (okrId, krId, logId) => {
         const targetOkr = okrs.find(o => o.id === okrId);
         if (!targetOkr) return;
-
         const updatedKeyResults = targetOkr.keyResults.map(kr => {
             if (kr.id === krId) {
                 const updatedLog = (kr.attentionLog || []).map(log => {
@@ -806,12 +789,17 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
         </div>
     );
 
-    const totalStatusSummary = projectStatusSummary.reduce((acc, curr) => {
-        Object.keys(STATUSES).forEach(status => {
-            acc[status] = (acc[status] || 0) + (curr[status] || 0);
-        });
-        return acc;
-    }, {});
+    const ProgressItem = ({ name, progress }) => (
+        <div>
+            <div className="flex justify-between items-center mb-1">
+                <p className="font-semibold text-gray-700 truncate pr-4">{name}</p>
+                <span className="font-bold text-gray-800">{progress}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div className={`${getStatusColor(progress)} h-2.5 rounded-full`} style={{ width: `${progress}%` }}></div>
+            </div>
+        </div>
+    );
 
     return (
         <div className="space-y-6" ref={executiveViewRef}>
@@ -823,7 +811,6 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
                     </div>
                 </div>
             </Card>
-
             <div className="space-y-2">
                 <h3 className="text-lg font-semibold text-gray-500 uppercase tracking-wider">Painel de Indicadores-Chave</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -833,27 +820,15 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
                     <StatCard icon={<Clock size={24} className="text-blue-800" />} label="Próximos Passos" value={nextSteps.length} colorClass="bg-blue-200" />
                 </div>
             </div>
-
             <div className="space-y-2">
                 <h3 className="text-lg font-semibold text-gray-500 uppercase tracking-wider">Análise Detalhada</h3>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                     <Card className="lg:col-span-1">
                         <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center"><Layers className="mr-2 text-gray-500" />Status por Projeto</h3>
                         <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                             <div className="p-2 bg-gray-100 rounded-lg">
-                                <p className="font-semibold text-gray-800 truncate pr-4 mb-2">Total Geral</p>
-                                <div className="flex justify-around text-center text-xs">
-                                    {Object.keys(STATUSES).map(s => (
-                                        <div key={s}>
-                                            <p className="font-bold text-lg">{totalStatusSummary[s] || 0}</p>
-                                            <p className="text-gray-500">{s}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
                             {projectStatusSummary.map(proj => (
-                                <div key={proj.name}>
-                                    <p className="font-semibold text-gray-700 truncate pr-4 mb-2">{proj.name}</p>
+                                <div key={proj.name} className="p-3 bg-gray-50 rounded-lg">
+                                    <p className="font-semibold text-gray-700 truncate pr-4 mb-2">{proj.name} ({proj.tasksCount})</p>
                                     <div className="flex justify-around text-center text-xs">
                                         {Object.keys(STATUSES).map(s => (
                                             <div key={s}>
@@ -867,24 +842,24 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
                         </div>
                     </Card>
                     <Card className="lg:col-span-1">
-                        <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center"><Target className="mr-2 text-gray-500" />Progresso dos Objetivos</h3>
+                        <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center"><TrendingUp className="mr-2 text-gray-500" />Progresso por Projeto</h3>
                         <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                            {okrsWithProgress.length > 0 ? okrsWithProgress.map(okr => (
-                                <div key={okr.id}>
-                                    <div className="flex justify-between items-center mb-1">
-                                        <p className="font-semibold text-gray-700 truncate pr-4">{okr.objective}</p>
-                                        <span className="font-bold text-gray-800">{okr.progress}%</span>
-                                    </div>
-                                    <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                        <div className={`${getStatusColor(okr.progress)} h-2.5 rounded-full`} style={{ width: `${okr.progress}%` }}></div>
-                                    </div>
-                                </div>
-                            )) : <p className="text-gray-500">Nenhum OKR definido.</p>}
+                            {projectProgressSummary.length > 0 ? projectProgressSummary.map(proj => (
+                                <ProgressItem key={proj.name} name={proj.name} progress={proj.progress} />
+                            )) : <p className="text-gray-500">Nenhum projeto com tarefas.</p>}
                         </div>
                     </Card>
                     <Card className="lg:col-span-1">
-                        <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center"><AlertTriangle className="mr-2 text-red-500" />Inteligência</h3>
-                        <div className="space-y-4">
+                        <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center"><Target className="mr-2 text-gray-500" />Progresso dos Objetivos</h3>
+                        <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                            {okrsWithProgress.length > 0 ? okrsWithProgress.map(okr => (
+                                <ProgressItem key={okr.id} name={okr.objective} progress={okr.progress} />
+                            )) : <p className="text-gray-500">Nenhum OKR definido.</p>}
+                        </div>
+                    </Card>
+                    <Card className="lg:col-span-3">
+                        <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center"><AlertTriangle className="mr-2 text-red-500" />Inteligência e Ações</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <h4 className="font-semibold text-gray-700 mb-2">Pontos de Atenção</h4>
                                  <div className="space-y-3">
@@ -927,9 +902,7 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
     );
 };
 
-
 // --- Componentes de OKR ---
-
 const OkrForm = ({ okr, onSave, onCancel }) => {
     const [objective, setObjective] = useState(okr?.objective || '');
     const [keyResults, setKeyResults] = useState(okr?.keyResults || []);
@@ -1051,7 +1024,6 @@ const KrAttentionModal = ({ isOpen, onClose, kr, onSaveAttentionLog }) => {
     };
 
     if (!isOpen) return null;
-
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Histórico de Pontos de Atenção" size="2xl">
             <div className="space-y-4">
@@ -1078,7 +1050,6 @@ const KrAttentionModal = ({ isOpen, onClose, kr, onSaveAttentionLog }) => {
         </Modal>
     );
 };
-
 
 const KrItem = ({ kr, onUpdate, onDeleteUpdate, onSaveAttentionLog }) => {
     const [isUpdating, setIsUpdating] = useState(false);
@@ -1170,7 +1141,7 @@ const OkrView = ({ okrs, onSave, onDelete }) => {
     };
     
     const handleDeleteUpdate = (okr, krId, updateId) => {
-        // Lógica de deleção de update
+        // TODO: Implementar lógica de deleção de update se necessário
     };
 
     const handleEdit = (okr) => {
@@ -1268,7 +1239,6 @@ const OkrView = ({ okrs, onSave, onDelete }) => {
     );
 };
 
-
 // --- Componente Principal ---
 export default function App() {
     const [userId, setUserId] = useState(null);
@@ -1280,7 +1250,8 @@ export default function App() {
     const [view, setView] = useState('workspace');
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState(null);
-    const [filters, setFilters] = useState({ priority: 'Todos', status: 'Todos', labels: [] });
+    // AJUSTE 1: Estado do filtro de etiquetas alterado para string
+    const [filters, setFilters] = useState({ priority: 'Todos', status: 'Todos', label: 'Todos' });
     const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
     const [itemToDelete, setItemToDelete] = useState(null);
     const [zoomLevel, setZoomLevel] = useState(5);
@@ -1370,14 +1341,18 @@ export default function App() {
         return tasks.filter(task => {
             const statusMatch = filters.status === 'Todos' || task.status === filters.status;
             const priorityMatch = filters.priority === 'Todos' || task.priority === filters.priority;
-            const labelMatch = filters.labels.length === 0 || (task.labels && task.labels.some(l => filters.labels.includes(l)));
+            // AJUSTE 1: Lógica de filtro de etiqueta atualizada para string
+            const labelMatch = filters.label === 'Todos' || (task.labels && task.labels.includes(filters.label));
             return statusMatch && priorityMatch && labelMatch;
         }).sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
     }, [tasks, filters]);
 
+    if (isLoading) {
+        return <div className="flex justify-center items-center min-h-screen bg-gray-50"><p className="text-lg text-gray-600">Carregando dados...</p></div>
+    }
+
     return (
         <div className="bg-gray-50 text-gray-800 min-h-screen p-4 md:p-6 font-sans">
-             <style>{`.printing { background-color: white !important; } .printing .no-print { display: none !important; }`}</style>
             <div className="max-w-full mx-auto">
                 <header className="mb-6 no-print">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -1388,7 +1363,7 @@ export default function App() {
                         <div className="flex items-center bg-gray-200 rounded-lg p-1 space-x-1">
                             <Button onClick={() => setView('workspace')} variant={view === 'workspace' ? 'primary' : 'secondary'} className="!shadow-none"><Layers size={16} /> Workspace</Button>
                             <Button onClick={() => setView('okr')} variant={view === 'okr' ? 'primary' : 'secondary'} className="!shadow-none"><Target size={16} /> OKRs</Button>
-                            <Button onClick={() => setView('executive')} variant={view === 'executive' ? 'primary' : 'secondary'} className="!shadow-none"><Briefcase size={16} /> Executive</Button>
+                            <Button onClick={() => setView('executive')} variant={view === 'executive' ? 'primary' : 'secondary'} className="!shadow-none"><Briefcase size={16} /> Painel Executivo</Button>
                         </div>
                     </div>
                 </header>
