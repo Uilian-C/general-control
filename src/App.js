@@ -98,7 +98,6 @@ const calculateOkrProgress = (okr) => {
     return Math.round(weightedProgressSum / totalWeight);
 };
 
-// NOVA FUNÇÃO: Calcula o ritmo necessário e dias restantes para um KR
 const calculatePacingInfo = (startDate, targetDate, startValue, targetValue, currentValue) => {
     if (!startDate || !targetDate) {
         return { daysRemaining: null, requiredPace: null, status: 'no-date' };
@@ -131,7 +130,6 @@ const calculatePacingInfo = (startDate, targetDate, startValue, targetValue, cur
     return { daysRemaining, requiredPace: requiredPace.toFixed(1), status: 'on-track' };
 };
 
-// NOVA FUNÇÃO: Calcula o status geral de um OKR (progresso vs. tempo)
 const calculateOkrStatus = (startDate, targetDate, currentProgress) => {
     if (!startDate || !targetDate) return { status: 'no-date', text: 'Sem data alvo', color: 'bg-gray-400' };
 
@@ -792,10 +790,16 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
             return { name: tag, progress: Math.round(totalProgress / projectTasks.length) };
         }).sort((a,b) => a.progress - b.progress);
 
-        const okrsDetails = okrs.map(okr => ({
-            ...okr,
-            progress: calculateOkrProgress(okr)
-        })).sort((a,b) => a.progress - b.progress);
+        const okrsDetails = okrs.map(okr => {
+            const progress = calculateOkrProgress(okr);
+            // ADICIONADO: Cálculo do status do OKR para o painel executivo
+            const status = calculateOkrStatus(okr.startDate, okr.targetDate, progress);
+            return {
+                ...okr,
+                progress,
+                status 
+            };
+        }).sort((a,b) => a.progress - b.progress);
         
         const totalOkrProgress = okrsDetails.reduce((sum, okr) => sum + okr.progress, 0);
         const avgOkrProgress = okrs.length > 0 ? Math.round(totalOkrProgress / okrs.length) : 0;
@@ -867,18 +871,6 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
         </div>
     );
 
-    const ProgressItem = ({ name, progress }) => (
-        <div>
-            <div className="flex justify-between items-center mb-1">
-                <p className="font-semibold text-gray-700 truncate pr-4">{name}</p>
-                <span className="font-bold text-gray-800">{progress}%</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div className={`${getStatusColor(progress)} h-2.5 rounded-full`} style={{ width: `${progress}%` }}></div>
-            </div>
-        </div>
-    );
-
     return (
         <div className="space-y-6" ref={executiveViewRef}>
             <Card>
@@ -923,15 +915,35 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
                         <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center"><TrendingUp className="mr-2 text-gray-500" />Progresso por Projeto</h3>
                         <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
                             {projectProgressSummary.length > 0 ? projectProgressSummary.map(proj => (
-                                <ProgressItem key={proj.name} name={proj.name} progress={proj.progress} />
+                                <div key={proj.name}>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <p className="font-semibold text-gray-700 truncate pr-4">{proj.name}</p>
+                                        <span className="font-bold text-gray-800">{proj.progress}%</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-2.5">
+                                        <div className={`${getStatusColor(proj.progress)} h-2.5 rounded-full`} style={{ width: `${proj.progress}%` }}></div>
+                                    </div>
+                                </div>
                             )) : <p className="text-gray-500">Nenhum projeto com tarefas.</p>}
                         </div>
                     </Card>
+                    {/* CARD ATUALIZADO: "Status dos Objetivos" */}
                     <Card className="lg:col-span-1">
-                        <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center"><Target className="mr-2 text-gray-500" />Progresso dos Objetivos</h3>
+                        <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center"><Target className="mr-2 text-gray-500" />Status dos Objetivos</h3>
                         <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
                             {okrsWithProgress.length > 0 ? okrsWithProgress.map(okr => (
-                                <ProgressItem key={okr.id} name={okr.objective} progress={okr.progress} />
+                                <div key={okr.id}>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <p className="font-semibold text-gray-700 truncate pr-4">{okr.objective}</p>
+                                        <span className={`px-2 py-0.5 text-xs font-semibold text-white rounded-full ${okr.status.color}`}>{okr.status.text}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-full bg-gray-200 rounded-full h-2.5">
+                                            <div className={`${getStatusColor(okr.progress)} h-2.5 rounded-full`} style={{ width: `${okr.progress}%` }}></div>
+                                        </div>
+                                        <span className="font-bold text-gray-800 text-sm">{okr.progress}%</span>
+                                    </div>
+                                </div>
                             )) : <p className="text-gray-500">Nenhum OKR definido.</p>}
                         </div>
                     </Card>
@@ -1182,7 +1194,6 @@ const KrItem = ({ kr, okrStartDate, okrTargetDate, onUpdate, onDeleteUpdate, onS
                 <div className="mt-2">
                     <div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div></div>
                 </div>
-                {/* NOVA SEÇÃO: Informações de Ritmo e Prazos */}
                 {pacingInfo.status !== 'no-date' && (
                     <div className="flex justify-between items-center text-xs text-gray-500 border-t pt-2 mt-2">
                         <div className="flex items-center gap-1">
@@ -1312,7 +1323,6 @@ const OkrView = ({ okrs, onSave, onDelete }) => {
                                             <Button onClick={(e) => { e.stopPropagation(); requestDeleteOkr(okr.id); }} variant="ghost" className="!p-2 text-red-500 hover:bg-red-50"><Trash2 size={16} /></Button>
                                         </div>
                                     </div>
-                                    {/* NOVA SEÇÃO: Informações de Data e Status do OKR */}
                                     <div className="mt-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-sm text-gray-500">
                                         <div className="flex items-center gap-2">
                                             <Calendar size={14} />
