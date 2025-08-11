@@ -47,7 +47,7 @@ const CYCLE_COLORS = ['#fecaca', '#fed7aa', '#bbf7d0', '#bfdbfe', '#e9d5ff', '#f
 const formatDate = (dateInput, includeTime = false) => {
   if (!dateInput) return '';
   const date = dateInput.toDate ? dateInput.toDate() : new Date(dateInput);
-  date.setUTCDate(date.getUTCDate() + 1);
+  // Removida a linha que adicionava um dia para corrigir o desalinhamento
   const options = {
     day: '2-digit',
     month: '2-digit',
