@@ -47,12 +47,11 @@ const CYCLE_COLORS = ['#fecaca', '#fed7aa', '#bbf7d0', '#bfdbfe', '#e9d5ff', '#f
 const formatDate = (dateInput, includeTime = false) => {
   if (!dateInput) return '';
   const date = dateInput.toDate ? dateInput.toDate() : new Date(dateInput);
-  // Removida a linha que adicionava um dia para corrigir o desalinhamento
   const options = {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
-    timeZone: 'UTC'
+    timeZone: 'UTC' // Manter UTC para consistência na exibição
   };
   if (includeTime) {
     options.hour = '2-digit';
@@ -60,6 +59,13 @@ const formatDate = (dateInput, includeTime = false) => {
   }
   return new Intl.DateTimeFormat('pt-BR', options).format(date);
 };
+
+// Função para criar datas no fuso horário local, evitando problemas com UTC
+const parseLocalDate = (dateString) => {
+    if (!dateString) return null;
+    // Adicionar T00:00:00 força o JS a interpretar a data no fuso horário local
+    return new Date(dateString + 'T00:00:00');
+}
 
 const getDaysInView = (startDate, endDate) => {
     if (!startDate || !endDate) return [];
@@ -103,9 +109,8 @@ const calculatePacingInfo = (startDate, targetDate, startValue, targetValue, cur
         return { daysRemaining: null, requiredPace: null, status: 'no-date' };
     }
     const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
-    const target = new Date(targetDate);
-    target.setUTCHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+    const target = parseLocalDate(targetDate);
     
     const progress = calculateKrProgress({ startValue, targetValue, currentValue });
     if (progress >= 100) {
@@ -131,11 +136,9 @@ const calculatePacingInfo = (startDate, targetDate, startValue, targetValue, cur
 const calculateOkrStatus = (startDate, targetDate, currentProgress) => {
     if (!startDate || !targetDate) return { status: 'no-date', text: 'Sem data alvo', color: 'bg-gray-400' };
     const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
-    const start = new Date(startDate);
-    start.setUTCHours(0, 0, 0, 0);
-    const target = new Date(targetDate);
-    target.setUTCHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+    const start = parseLocalDate(startDate);
+    const target = parseLocalDate(targetDate);
 
     if (currentProgress >= 100) return { status: 'completed', text: 'Concluído', color: 'bg-green-500' };
     if (target < today) return { status: 'overdue', text: 'Atrasado', color: 'bg-red-500' };
@@ -165,8 +168,8 @@ const calculateTaskProgress = (task) => {
 
 const getTaskDurationInDays = (task) => {
     if (!task.startDate || !task.endDate) return 1;
-    const start = new Date(task.startDate);
-    const end = new Date(task.endDate);
+    const start = parseLocalDate(task.startDate);
+    const end = parseLocalDate(task.endDate);
     const duration = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
     return Math.max(1, duration + 1);
 };
@@ -222,7 +225,6 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, children }) => {
     );
 };
 
-// --- [NOVO] Modal de Gestão de Ciclos ---
 const CyclesModal = ({ isOpen, onClose, cycles, onSave, onDelete }) => {
     const [localCycles, setLocalCycles] = useState([]);
 
@@ -592,7 +594,7 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
 
 const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
     const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
     const timelineRef = useRef(null);
     const [isDragging, setIsDragging] = useState(false);
     const [startX, setStartX] = useState(0);
@@ -602,9 +604,9 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
     
     const { days, timelineWidth, headerGroups, subHeaderGroups, todayPosition } = useMemo(() => {
         let maxEndDate = null;
-        const allDates = [...tasks, ...cycles].map(item => new Date(item.endDate));
+        const allDates = [...tasks, ...cycles].map(item => parseLocalDate(item.endDate));
         if (allDates.length > 0) {
-            const validEndDates = allDates.filter(date => !isNaN(date.getTime()));
+            const validEndDates = allDates.filter(date => date && !isNaN(date.getTime()));
             if (validEndDates.length > 0) {
                 maxEndDate = new Date(Math.max.apply(null, validEndDates));
             }
@@ -680,7 +682,7 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
             }
         }
         
-        const todayPos = (today.getTime() - new Date(viewStartDate).setUTCHours(0,0,0,0)) / (1000 * 60 * 60 * 24) * dayWidth;
+        const todayPos = (today.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24) * dayWidth;
         
         return { days, timelineWidth, headerGroups: primaryGroups, subHeaderGroups: secondaryGroups, todayPosition: todayPos };
     }, [viewStartDate, zoomLevel, tasks, cycles]);
@@ -723,7 +725,7 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
         <div className="relative bg-white border border-gray-200 rounded-lg shadow-sm">
             <div className="overflow-x-auto cursor-grab" ref={timelineRef} onMouseDown={onMouseDown} onMouseLeave={onMouseLeaveOrUp} onMouseUp={onMouseLeaveOrUp} onMouseMove={onMouseMove}>
                 <div style={{ width: timelineWidth }} className="relative">
-                    <div className="sticky top-0 z-20 bg-gray-100/80 backdrop-blur-sm h-16">
+                    <div className="sticky top-0 z-30 bg-gray-100/80 backdrop-blur-sm h-16">
                         <div className="flex border-b border-gray-300 h-8">
                              {headerGroups.map((group) => (<div key={group.key} className="flex-shrink-0 text-center font-bold text-gray-700 border-r border-gray-300 flex items-center justify-center" style={{ width: group.width }}><span className="whitespace-nowrap px-2">{group.label}</span></div>))}
                         </div>
@@ -734,12 +736,12 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                     
                     {/* Camada de Fundo (Grid e Backgrounds dos Ciclos) */}
                     <div className="absolute top-0 left-0 w-full h-full z-0">
-                        <div className="flex h-full">{days.map((day, index) => (<div key={index} className={`h-full border-r ${day.getDay() === 0 || day.getDay() === 6 ? 'bg-gray-50/50' : 'border-gray-100'}`} style={{ width: dayWidth }}></div>))}</div>
+                        <div className="flex h-full">{days.map((day, index) => (<div key={index} className={`h-full border-r ${day.getUTCDay() === 0 || day.getUTCDay() === 6 ? 'bg-gray-50/50' : 'border-gray-100'}`} style={{ width: dayWidth }}></div>))}</div>
                          {cycles.map(cycle => {
-                             const cycleStart = new Date(cycle.startDate); cycleStart.setUTCHours(0,0,0,0);
-                             const cycleEnd = new Date(cycle.endDate); cycleEnd.setUTCHours(0,0,0,0);
-                             if (cycleEnd < viewStartDate || cycleStart > new Date(viewStartDate).setDate(viewStartDate.getDate() + days.length)) return null;
-                             const startOffset = (cycleStart.getTime() - new Date(viewStartDate).setUTCHours(0,0,0,0)) / (1000 * 60 * 60 * 24);
+                             const cycleStart = parseLocalDate(cycle.startDate);
+                             const cycleEnd = parseLocalDate(cycle.endDate);
+                             if (!cycleStart || !cycleEnd || cycleEnd < viewStartDate || cycleStart > new Date(viewStartDate).setDate(viewStartDate.getDate() + days.length)) return null;
+                             const startOffset = (cycleStart.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24);
                              const duration = Math.max(1, (cycleEnd.getTime() - cycleStart.getTime()) / (1000 * 60 * 60 * 24) + 1);
                              return (
                                 <div key={cycle.id} className="absolute top-16 bottom-0" style={{ left: `${startOffset * dayWidth}px`, width: `${duration * dayWidth}px` }}>
@@ -752,10 +754,10 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                     {/* Camada de Nomes dos Ciclos */}
                     <div className="absolute top-16 left-0 w-full h-6 z-10 pointer-events-none">
                          {cycles.map(cycle => {
-                             const cycleStart = new Date(cycle.startDate); cycleStart.setUTCHours(0,0,0,0);
-                             const cycleEnd = new Date(cycle.endDate); cycleEnd.setUTCHours(0,0,0,0);
-                             if (cycleEnd < viewStartDate || cycleStart > new Date(viewStartDate).setDate(viewStartDate.getDate() + days.length)) return null;
-                             const startOffset = (cycleStart.getTime() - new Date(viewStartDate).setUTCHours(0,0,0,0)) / (1000 * 60 * 60 * 24);
+                             const cycleStart = parseLocalDate(cycle.startDate);
+                             const cycleEnd = parseLocalDate(cycle.endDate);
+                             if (!cycleStart || !cycleEnd || cycleEnd < viewStartDate || cycleStart > new Date(viewStartDate).setDate(viewStartDate.getDate() + days.length)) return null;
+                             const startOffset = (cycleStart.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24);
                              const duration = Math.max(1, (cycleEnd.getTime() - cycleStart.getTime()) / (1000 * 60 * 60 * 24) + 1);
                              return (
                                 <div key={cycle.id} className="absolute top-0 flex items-center" style={{ left: `${startOffset * dayWidth}px`, width: `${duration * dayWidth}px` }}>
@@ -771,16 +773,17 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                             const isCollapsed = collapsedGroups[group];
                             return (
                                 <div key={group}>
-                                    <div className="sticky top-[64px] z-10 flex items-center h-10 bg-white/80 backdrop-blur-sm border-b border-t border-gray-200 -ml-px" onClick={() => toggleGroup(group)}>
+                                    <div className="sticky top-[64px] z-20 flex items-center h-10 bg-white/80 backdrop-blur-sm border-b border-t border-gray-200 -ml-px" onClick={() => toggleGroup(group)}>
                                         <div className="flex items-center gap-2 p-2 cursor-pointer"><ChevronsUpDown size={16} className={`transition-transform ${isCollapsed ? '-rotate-90' : ''}`} /><h3 className="font-bold text-gray-800">{group}</h3></div>
                                     </div>
                                     {!isCollapsed && (
                                         <div className="relative" style={{ height: groupedTasks[group].length * 48 + 10 }}>
                                             {groupedTasks[group].map((task, taskIndex) => {
-                                                const taskStart = new Date(task.startDate); taskStart.setUTCHours(0, 0, 0, 0); const taskEnd = new Date(task.endDate); taskEnd.setUTCHours(0, 0, 0, 0);
-                                                if (!task.startDate || !task.endDate || taskEnd < viewStartDate || taskStart > new Date(viewStartDate).setDate(viewStartDate.getDate() + days.length)) return null;
+                                                const taskStart = parseLocalDate(task.startDate);
+                                                const taskEnd = parseLocalDate(task.endDate);
+                                                if (!taskStart || !taskEnd || taskEnd < viewStartDate || taskStart > new Date(viewStartDate).setDate(viewStartDate.getDate() + days.length)) return null;
                                                 
-                                                const startOffset = (taskStart.getTime() - new Date(viewStartDate).setUTCHours(0,0,0,0)) / (1000 * 60 * 60 * 24); const duration = Math.max(1, (taskEnd.getTime() - taskStart.getTime()) / (1000 * 60 * 60 * 24) + 1); const left = startOffset * dayWidth; const width = duration * dayWidth - 4;
+                                                const startOffset = (taskStart.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24); const duration = Math.max(1, (taskEnd.getTime() - taskStart.getTime()) / (1000 * 60 * 60 * 24) + 1); const left = startOffset * dayWidth; const width = duration * dayWidth - 4;
                                                 const progress = calculateTaskProgress(task);
                                                 const daysRemaining = Math.ceil((taskEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
                                                 
@@ -1633,6 +1636,7 @@ export default function App() {
     const [viewStartDate, setViewStartDate] = useState(() => {
         const date = new Date();
         date.setDate(date.getDate() - 15);
+        date.setHours(0,0,0,0);
         return date;
     });
     
