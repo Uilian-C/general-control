@@ -731,28 +731,42 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                              {subHeaderGroups.map((group) => (<div key={group.key} className={`flex-shrink-0 text-center font-semibold border-r border-gray-200 flex flex-col justify-center items-center ${group.isToday ? 'bg-indigo-100' : ''}`} style={{ width: group.width }}><span className={`text-xs ${group.isToday ? 'text-indigo-600' : 'text-gray-500'}`}>{group.subLabel}</span><span className={`whitespace-nowrap text-sm ${group.isToday ? 'text-indigo-600 font-bold' : 'text-gray-600'}`}>{group.label}</span></div>))}
                         </div>
                     </div>
+                    
+                    {/* Camada de Fundo (Grid e Backgrounds dos Ciclos) */}
                     <div className="absolute top-0 left-0 w-full h-full z-0">
                         <div className="flex h-full">{days.map((day, index) => (<div key={index} className={`h-full border-r ${day.getDay() === 0 || day.getDay() === 6 ? 'bg-gray-50/50' : 'border-gray-100'}`} style={{ width: dayWidth }}></div>))}</div>
-                        {todayPosition >= 0 && todayPosition <= timelineWidth && (<div className="absolute top-0 h-full w-0.5 bg-red-500/70 z-10" style={{ left: todayPosition }}><div className="absolute -top-1 -translate-x-1/2 left-1/2 bg-red-500 rounded-full w-2 h-2"></div></div>)}
                          {cycles.map(cycle => {
                              const cycleStart = new Date(cycle.startDate); cycleStart.setUTCHours(0,0,0,0);
                              const cycleEnd = new Date(cycle.endDate); cycleEnd.setUTCHours(0,0,0,0);
                              if (cycleEnd < viewStartDate || cycleStart > new Date(viewStartDate).setDate(viewStartDate.getDate() + days.length)) return null;
-
                              const startOffset = (cycleStart.getTime() - new Date(viewStartDate).setUTCHours(0,0,0,0)) / (1000 * 60 * 60 * 24);
                              const duration = Math.max(1, (cycleEnd.getTime() - cycleStart.getTime()) / (1000 * 60 * 60 * 24) + 1);
-                             const left = startOffset * dayWidth;
-                             const width = duration * dayWidth;
-
                              return (
-                                <div key={cycle.id} className="absolute top-16 bottom-0 z-0" style={{ left: `${left}px`, width: `${width}px` }}>
+                                <div key={cycle.id} className="absolute top-16 bottom-0" style={{ left: `${startOffset * dayWidth}px`, width: `${duration * dayWidth}px` }}>
                                     <div className="h-full w-full border-x" style={{ backgroundColor: cycle.color, opacity: 0.15, borderColor: cycle.color }}></div>
-                                    <div className="absolute -top-0.5 left-0 w-full font-bold text-center text-xs p-1" style={{ color: cycle.color }}>{cycle.name}</div>
                                 </div>
                              )
                         })}
                     </div>
-                    <div className="relative z-10 pt-2">
+
+                    {/* Camada de Nomes dos Ciclos */}
+                    <div className="absolute top-16 left-0 w-full h-6 z-10 pointer-events-none">
+                         {cycles.map(cycle => {
+                             const cycleStart = new Date(cycle.startDate); cycleStart.setUTCHours(0,0,0,0);
+                             const cycleEnd = new Date(cycle.endDate); cycleEnd.setUTCHours(0,0,0,0);
+                             if (cycleEnd < viewStartDate || cycleStart > new Date(viewStartDate).setDate(viewStartDate.getDate() + days.length)) return null;
+                             const startOffset = (cycleStart.getTime() - new Date(viewStartDate).setUTCHours(0,0,0,0)) / (1000 * 60 * 60 * 24);
+                             const duration = Math.max(1, (cycleEnd.getTime() - cycleStart.getTime()) / (1000 * 60 * 60 * 24) + 1);
+                             return (
+                                <div key={cycle.id} className="absolute top-0 flex items-center" style={{ left: `${startOffset * dayWidth}px`, width: `${duration * dayWidth}px` }}>
+                                    <div className="w-full font-bold text-center text-xs p-1 truncate" style={{ color: cycle.color }}>{cycle.name}</div>
+                                </div>
+                             )
+                        })}
+                    </div>
+
+                    {/* Camada de Tarefas */}
+                    <div className="relative z-20 pt-2">
                         {Object.keys(groupedTasks).sort().map((group) => {
                             const isCollapsed = collapsedGroups[group];
                             return (
@@ -804,6 +818,13 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                             );
                         })}
                     </div>
+
+                     {/* Régua do Dia Atual */}
+                    {todayPosition >= 0 && todayPosition <= timelineWidth && (
+                        <div className="absolute top-0 h-full w-0.5 bg-red-500 z-30 pointer-events-none" style={{ left: todayPosition }}>
+                            <div className="absolute -top-1 -translate-x-1/2 left-1/2 bg-red-500 rounded-full w-2 h-2"></div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -1781,10 +1802,12 @@ export default function App() {
                             </Button>
                         </div>
                     </div>
-                     <div className="mt-4 flex items-center bg-gray-200 rounded-lg p-1 space-x-1 w-full md:w-auto">
-                        <Button onClick={() => setView('workspace')} variant={view === 'workspace' ? 'primary' : 'secondary'} className="!shadow-none flex-1 md:flex-none"><Layers size={16} /> Workspace</Button>
-                        <Button onClick={() => setView('okr')} variant={view === 'okr' ? 'primary' : 'secondary'} className="!shadow-none flex-1 md:flex-none"><Target size={16} /> OKRs</Button>
-                        <Button onClick={() => setView('executive')} variant={view === 'executive' ? 'primary' : 'secondary'} className="!shadow-none flex-1 md:flex-none"><Briefcase size={16} /> Painel Executivo</Button>
+                     <div className="mt-4">
+                        <div className="inline-flex items-center bg-gray-200 rounded-lg p-1 space-x-1">
+                            <Button onClick={() => setView('workspace')} variant={view === 'workspace' ? 'primary' : 'secondary'} className="!shadow-none"><Layers size={16} /> Workspace</Button>
+                            <Button onClick={() => setView('okr')} variant={view === 'okr' ? 'primary' : 'secondary'} className="!shadow-none"><Target size={16} /> OKRs</Button>
+                            <Button onClick={() => setView('executive')} variant={view === 'executive' ? 'primary' : 'secondary'} className="!shadow-none"><Briefcase size={16} /> Painel Executivo</Button>
+                        </div>
                     </div>
                 </header>
                 <main>
