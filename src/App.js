@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, serverTimestamp } from 'firebase/firestore';
-import { Target, Layers, Briefcase, Edit, Plus, Trash2, X, Settings, Tag, Palette, TrendingUp, Download, Calendar, ListTodo, ZoomIn, ZoomOut, ChevronsUpDown, CheckCircle, MoreVertical, History, Check, Zap, ChevronDown, LayoutGrid, List, AlertTriangle, Clock, TrendingUp as TrendingUpIcon, Lock, Unlock, Gauge } from 'lucide-react';
+import { Target, Layers, Briefcase, Edit, Plus, Trash2, X, Settings, Tag, Palette, TrendingUp, Download, Calendar, ListTodo, ZoomIn, ZoomOut, ChevronsUpDown, CheckCircle, MoreVertical, History, Check, Zap, ChevronDown, LayoutGrid, List, AlertTriangle, Clock, TrendingUp as TrendingUpIcon, Lock, Unlock, Gauge, LogOut, User,LogIn, ArrowRight } from 'lucide-react';
 
 // --- ATENÇÃO: Para a funcionalidade de exportar PDF funcionar ---
 // Adicione estas duas linhas no <head> do seu arquivo HTML principal (ex: index.html)
@@ -46,7 +46,6 @@ const TASK_COLORS = ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#c084fc', '#f4
 const formatDate = (dateInput, includeTime = false) => {
   if (!dateInput) return '';
   const date = dateInput.toDate ? dateInput.toDate() : new Date(dateInput);
-  // Adiciona um dia para corrigir a exibição de datas UTC no fuso local
   date.setUTCDate(date.getUTCDate() + 1);
   const options = {
     day: '2-digit',
@@ -792,7 +791,6 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
 
         const okrsDetails = okrs.map(okr => {
             const progress = calculateOkrProgress(okr);
-            // ADICIONADO: Cálculo do status do OKR para o painel executivo
             const status = calculateOkrStatus(okr.startDate, okr.targetDate, progress);
             return {
                 ...okr,
@@ -927,7 +925,6 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
                             )) : <p className="text-gray-500">Nenhum projeto com tarefas.</p>}
                         </div>
                     </Card>
-                    {/* CARD ATUALIZADO: "Status dos Objetivos" */}
                     <Card className="lg:col-span-1">
                         <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center"><Target className="mr-2 text-gray-500" />Status dos Objetivos</h3>
                         <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
@@ -1367,9 +1364,104 @@ const OkrView = ({ okrs, onSave, onDelete }) => {
     );
 };
 
+// NOVO: Componente para a tela de Login com abas
+const LoginScreen = () => {
+    const [isLoginView, setIsLoginView] = useState(true);
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [name, setName] = useState('');
+    const [error, setError] = useState('');
+
+    const handleGoogleLogin = async () => {
+        const provider = new GoogleAuthProvider();
+        try {
+            await signInWithPopup(auth, provider);
+            setError('');
+        } catch (error) {
+            console.error("Erro durante o login com Google:", error);
+            if (error.code === 'auth/unauthorized-domain') {
+                setError('Erro: Este domínio não está autorizado. Verifique as configurações do Firebase.');
+            } else {
+                setError('Ocorreu um erro durante o login com Google.');
+            }
+        }
+    };
+
+    const handleEmailAuth = async (e) => {
+        e.preventDefault();
+        setError('');
+        if (isLoginView) {
+            // Login com E-mail e Senha
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+            } catch (error) {
+                setError('E-mail ou senha inválidos.');
+                console.error("Erro de login:", error);
+            }
+        } else {
+            // Registro com E-mail e Senha
+            try {
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                await updateProfile(userCredential.user, { displayName: name });
+            } catch (error) {
+                if (error.code === 'auth/email-already-in-use') {
+                    setError('Este e-mail já está em uso.');
+                } else {
+                    setError('Erro ao criar a conta. A senha deve ter no mínimo 6 caracteres.');
+                }
+                console.error("Erro de registro:", error);
+            }
+        }
+    };
+
+    return (
+        <div className="flex items-center justify-center min-h-screen bg-gray-50">
+            <div className="p-8 bg-white rounded-2xl shadow-xl max-w-md w-full">
+                <h1 className="text-4xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-cyan-600 mb-2">
+                    Roadmap Ágil
+                </h1>
+                <p className="text-center text-gray-600 mb-6">Seu planejamento estratégico em um só lugar.</p>
+                
+                <div className="flex border-b mb-6">
+                    <button onClick={() => setIsLoginView(true)} className={`flex-1 py-2 font-semibold ${isLoginView ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500'}`}>Entrar</button>
+                    <button onClick={() => setIsLoginView(false)} className={`flex-1 py-2 font-semibold ${!isLoginView ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500'}`}>Registrar-se</button>
+                </div>
+
+                <form onSubmit={handleEmailAuth} className="space-y-4">
+                    {!isLoginView && (
+                        <input type="text" placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} required className="w-full p-3 border rounded-lg" />
+                    )}
+                    <input type="email" placeholder="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full p-3 border rounded-lg" />
+                    <input type="password" placeholder="Senha" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full p-3 border rounded-lg" />
+                    
+                    <Button type="submit" variant="primary" className="w-full !py-3 !text-lg">
+                        {isLoginView ? 'Entrar' : 'Criar Conta'}
+                    </Button>
+                </form>
+
+                <div className="my-6 flex items-center">
+                    <div className="flex-grow border-t"></div>
+                    <span className="mx-4 text-gray-400">ou</span>
+                    <div className="flex-grow border-t"></div>
+                </div>
+
+                <Button onClick={handleGoogleLogin} variant="secondary" className="w-full !py-3">
+                    <svg className="w-5 h-5 mr-2" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.42-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path><path fill="none" d="M0 0h48v48H0z"></path></svg>
+                    Continuar com Google
+                </Button>
+
+                {error && (
+                    <p className="mt-4 text-sm text-red-600 bg-red-100 p-3 rounded-lg text-center">{error}</p>
+                )}
+            </div>
+        </div>
+    );
+};
+
+
 // --- Componente Principal ---
 export default function App() {
-    const [userId, setUserId] = useState(null);
+    const [user, setUser] = useState(null);
     const [appId] = useState('general-control');
     const [error, setError] = useState(null);
     const [tasks, setTasks] = useState([]);
@@ -1389,22 +1481,26 @@ export default function App() {
     });
     
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
-            if (user) setUserId(user.uid);
-            else signInAnonymously(auth).catch((authError) => { console.error("Anonymous sign-in error:", authError); setError("Falha na autenticação."); });
+        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+            setUser(currentUser);
+            setIsLoading(false);
         });
         return () => unsubscribe();
     }, []);
 
     useEffect(() => {
-        if (!userId || !appId) return;
-        setIsLoading(true);
-        const tasksCollectionPath = `artifacts/${appId}/public/data/roadmap_tasks`;
-        const okrsCollectionPath = `artifacts/${appId}/public/data/okrs`;
+        if (!user) {
+            setTasks([]);
+            setOkrs([]);
+            return;
+        };
+
+        const userId = user.uid;
+        const tasksCollectionPath = `artifacts/${appId}/users/${userId}/roadmap_tasks`;
+        const okrsCollectionPath = `artifacts/${appId}/users/${userId}/okrs`;
 
         const unsubscribeTasks = onSnapshot(query(collection(db, tasksCollectionPath)), (snapshot) => {
             setTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            setIsLoading(false);
         }, (err) => { console.error("Error fetching tasks:", err); setError("Falha ao carregar tarefas."); });
 
         const unsubscribeOkrs = onSnapshot(query(collection(db, okrsCollectionPath)), (snapshot) => {
@@ -1420,10 +1516,11 @@ export default function App() {
         }, (err) => { console.error("Error fetching OKRs:", err); setError("Falha ao carregar OKRs."); });
 
         return () => { unsubscribeTasks(); unsubscribeOkrs(); };
-    }, [userId, appId]);
+    }, [user, appId]);
 
     const handleSaveTask = async (taskData) => {
-        const collectionPath = `artifacts/${appId}/public/data/roadmap_tasks`;
+        if (!user) return;
+        const collectionPath = `artifacts/${appId}/users/${user.uid}/roadmap_tasks`;
 
         const dataForFirestore = {
             title: taskData.title,
@@ -1451,7 +1548,8 @@ export default function App() {
     };
 
     const handleSaveOkr = async (okrData) => {
-        const collectionPath = `artifacts/${appId}/public/data/okrs`;
+        if (!user) return;
+        const collectionPath = `artifacts/${appId}/users/${user.uid}/okrs`;
         if (okrData.id) {
             const { id, ...dataToUpdate } = okrData;
             await updateDoc(doc(db, collectionPath, id), dataToUpdate);
@@ -1467,9 +1565,9 @@ export default function App() {
     };
 
     const confirmDelete = async () => {
-        if (!itemToDelete) return;
+        if (!itemToDelete || !user) return;
         const { id, type } = itemToDelete;
-        const collectionPath = `artifacts/${appId}/public/data/${type === 'task' ? 'roadmap_tasks' : 'okrs'}`;
+        const collectionPath = `artifacts/${appId}/users/${user.uid}/${type === 'task' ? 'roadmap_tasks' : 'okrs'}`;
         await deleteDoc(doc(db, collectionPath, id));
         if (type === 'task') setIsTaskModalOpen(false);
         setIsConfirmDeleteOpen(false);
@@ -1479,6 +1577,12 @@ export default function App() {
     const handleOpenTaskModal = (task = null) => {
         setSelectedTask(task);
         setIsTaskModalOpen(true);
+    };
+
+    const handleLogout = () => {
+        signOut(auth).catch((error) => {
+            console.error("Erro ao sair:", error);
+        });
     };
 
     const filteredTasks = useMemo(() => {
@@ -1491,7 +1595,11 @@ export default function App() {
     }, [tasks, filters]);
 
     if (isLoading) {
-        return <div className="flex justify-center items-center min-h-screen bg-gray-50"><p className="text-lg text-gray-600">Carregando dados...</p></div>
+        return <div className="flex justify-center items-center min-h-screen bg-gray-50"><p className="text-lg text-gray-600">Carregando...</p></div>
+    }
+
+    if (!user) {
+        return <LoginScreen />;
     }
 
     return (
@@ -1503,11 +1611,20 @@ export default function App() {
                             <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-cyan-600">Roadmap Ágil Interativo</h1>
                             <p className="text-gray-600 mt-1">Planeje, execute e apresente com clareza e foco.</p>
                         </div>
-                        <div className="flex items-center bg-gray-200 rounded-lg p-1 space-x-1">
-                            <Button onClick={() => setView('workspace')} variant={view === 'workspace' ? 'primary' : 'secondary'} className="!shadow-none"><Layers size={16} /> Workspace</Button>
-                            <Button onClick={() => setView('okr')} variant={view === 'okr' ? 'primary' : 'secondary'} className="!shadow-none"><Target size={16} /> OKRs</Button>
-                            <Button onClick={() => setView('executive')} variant={view === 'executive' ? 'primary' : 'secondary'} className="!shadow-none"><Briefcase size={16} /> Painel Executivo</Button>
+                        <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2 text-sm text-gray-700">
+                                <User size={16} />
+                                <span>{user.displayName || 'Usuário'}</span>
+                            </div>
+                            <Button onClick={handleLogout} variant="secondary" className="!px-3 !py-2">
+                                <LogOut size={16} />
+                            </Button>
                         </div>
+                    </div>
+                     <div className="mt-4 flex items-center bg-gray-200 rounded-lg p-1 space-x-1 w-full md:w-auto">
+                        <Button onClick={() => setView('workspace')} variant={view === 'workspace' ? 'primary' : 'secondary'} className="!shadow-none flex-1 md:flex-none"><Layers size={16} /> Workspace</Button>
+                        <Button onClick={() => setView('okr')} variant={view === 'okr' ? 'primary' : 'secondary'} className="!shadow-none flex-1 md:flex-none"><Target size={16} /> OKRs</Button>
+                        <Button onClick={() => setView('executive')} variant={view === 'executive' ? 'primary' : 'secondary'} className="!shadow-none flex-1 md:flex-none"><Briefcase size={16} /> Painel Executivo</Button>
                     </div>
                 </header>
                 <main>
