@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, serverTimestamp } from 'firebase/firestore';
-import { Target, Layers, Briefcase, Edit, Plus, Trash2, X, Settings, Tag, Palette, TrendingUp, Download, Calendar, ListTodo, ZoomIn, ZoomOut, ChevronsUpDown, CheckCircle, MoreVertical, History, Check, Zap, ChevronDown, LayoutGrid, List, AlertTriangle, Clock, TrendingUp as TrendingUpIcon, Lock, Unlock, Gauge, LogOut, User,LogIn, ArrowRight } from 'lucide-react';
+import { Target, Layers, Briefcase, Edit, Plus, Trash2, X, Settings, Tag, Palette, TrendingUp, Download, Calendar, ListTodo, ZoomIn, ZoomOut, ChevronsUpDown, CheckCircle, MoreVertical, History, Check, Zap, ChevronDown, LayoutGrid, List, AlertTriangle, Clock, TrendingUp as TrendingUpIcon, Lock, Unlock, Gauge, LogOut, User,LogIn, ArrowRight, Repeat } from 'lucide-react';
 
 // --- ATENÇÃO: Para a funcionalidade de exportar PDF funcionar ---
 // Adicione estas duas linhas no <head> do seu arquivo HTML principal (ex: index.html)
@@ -42,6 +42,8 @@ const STATUSES = {
   'Bloqueado': { label: 'Bloqueado', color: 'bg-red-200 text-red-800', iconColor: 'text-red-500' },
 };
 const TASK_COLORS = ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#c084fc', '#f472b6', '#a3a3a3'];
+const CYCLE_COLORS = ['#fecaca', '#fed7aa', '#bbf7d0', '#bfdbfe', '#e9d5ff', '#fbcfe8'];
+
 
 const formatDate = (dateInput, includeTime = false) => {
   if (!dateInput) return '';
@@ -506,7 +508,7 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
     );
 };
 
-const Timeline = ({ tasks, onTaskClick, zoomLevel, viewStartDate }) => {
+const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
     const timelineRef = useRef(null);
@@ -518,11 +520,9 @@ const Timeline = ({ tasks, onTaskClick, zoomLevel, viewStartDate }) => {
     
     const { days, timelineWidth, headerGroups, todayPosition } = useMemo(() => {
         let maxEndDate = null;
-        if (tasks && tasks.length > 0) {
-            const validEndDates = tasks
-                .map(task => new Date(task.endDate))
-                .filter(date => !isNaN(date.getTime()));
-            
+        const allDates = [...tasks, ...cycles].map(item => new Date(item.endDate));
+        if (allDates.length > 0) {
+            const validEndDates = allDates.filter(date => !isNaN(date.getTime()));
             if (validEndDates.length > 0) {
                 maxEndDate = new Date(Math.max.apply(null, validEndDates));
             }
@@ -574,7 +574,7 @@ const Timeline = ({ tasks, onTaskClick, zoomLevel, viewStartDate }) => {
         const todayPos = (today.getTime() - new Date(viewStartDate).setUTCHours(0,0,0,0)) / (1000 * 60 * 60 * 24) * dayWidth;
         
         return { days, timelineWidth, headerGroups: groups, todayPosition: todayPos };
-    }, [viewStartDate, dayWidth, tasks]);
+    }, [viewStartDate, dayWidth, tasks, cycles]);
 
     const onMouseDown = (e) => {
         if (!timelineRef.current) return;
@@ -622,6 +622,22 @@ const Timeline = ({ tasks, onTaskClick, zoomLevel, viewStartDate }) => {
                     <div className="absolute top-0 left-0 w-full h-full z-0">
                         <div className="flex h-full">{days.map((day, index) => (<div key={index} className={`h-full border-r ${day.getDay() === 0 || day.getDay() === 6 ? 'bg-gray-50/50' : 'border-gray-100'}`} style={{ width: dayWidth }}></div>))}</div>
                         {todayPosition >= 0 && todayPosition <= timelineWidth && (<div className="absolute top-0 h-full w-0.5 bg-red-500/70 z-10" style={{ left: todayPosition }}><div className="absolute -top-1 -translate-x-1/2 left-1/2 bg-red-500 rounded-full w-2 h-2"></div></div>)}
+                         {cycles.map(cycle => {
+                             const cycleStart = new Date(cycle.startDate); cycleStart.setUTCHours(0,0,0,0);
+                             const cycleEnd = new Date(cycle.endDate); cycleEnd.setUTCHours(0,0,0,0);
+                             if (cycleEnd < viewStartDate || cycleStart > new Date(viewStartDate).setDate(viewStartDate.getDate() + days.length)) return null;
+
+                             const startOffset = (cycleStart.getTime() - new Date(viewStartDate).setUTCHours(0,0,0,0)) / (1000 * 60 * 60 * 24);
+                             const duration = Math.max(1, (cycleEnd.getTime() - cycleStart.getTime()) / (1000 * 60 * 60 * 24) + 1);
+                             const left = startOffset * dayWidth;
+                             const width = duration * dayWidth;
+
+                             return (
+                                <div key={cycle.id} className="absolute top-12 h-full z-0" style={{ left: `${left}px`, width: `${width}px`, backgroundColor: cycle.color, opacity: 0.2 }}>
+                                    <div className="sticky top-12 font-semibold text-gray-600 p-1 text-center">{cycle.name}</div>
+                                </div>
+                             )
+                        })}
                     </div>
                     <div className="relative z-10 pt-2">
                         {Object.keys(groupedTasks).sort().map((group) => {
@@ -698,7 +714,7 @@ const FilterList = ({ title, options, active, onFilterChange }) => (
 );
 
 
-const WorkspaceView = ({ tasks, onTaskClick, filters, setFilters, zoomLevel, setZoomLevel, viewStartDate, setViewStartDate, onOpenTaskModal }) => {
+const WorkspaceView = ({ tasks, cycles, onTaskClick, filters, setFilters, zoomLevel, setZoomLevel, viewStartDate, setViewStartDate, onOpenTaskModal, onOpenCyclesModal }) => {
     const allLabels = useMemo(() => {
         const labelSet = new Set();
         tasks.forEach(task => (task.labels || []).forEach(label => labelSet.add(label)));
@@ -714,7 +730,10 @@ const WorkspaceView = ({ tasks, onTaskClick, filters, setFilters, zoomLevel, set
             <Card>
                 <div className="flex flex-col gap-4">
                     <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                         <div className="flex items-center gap-2"><Button onClick={() => setViewStartDate(new Date(new Date().setDate(new Date().getDate() - 15)))} variant="secondary">Hoje</Button></div>
+                         <div className="flex items-center gap-2">
+                            <Button onClick={() => setViewStartDate(new Date(new Date().setDate(new Date().getDate() - 15)))} variant="secondary">Hoje</Button>
+                            <Button onClick={onOpenCyclesModal} variant="secondary"><Repeat size={16} className="mr-2"/> Gerenciar Ciclos</Button>
+                         </div>
                          <div className="flex items-center gap-2">
                             <button onClick={() => setZoomLevel(z => Math.max(1, z - 1))} className="p-2 rounded-full hover:bg-gray-200 transition-colors"><ZoomOut size={20} /></button>
                             <input type="range" min="1" max="10" value={zoomLevel} onChange={e => setZoomLevel(Number(e.target.value))} className="w-24" />
@@ -730,7 +749,7 @@ const WorkspaceView = ({ tasks, onTaskClick, filters, setFilters, zoomLevel, set
                     </div>
                 </div>
             </Card>
-            <Timeline tasks={tasks} onTaskClick={onTaskClick} zoomLevel={zoomLevel} viewStartDate={viewStartDate} />
+            <Timeline tasks={tasks} cycles={cycles} onTaskClick={onTaskClick} zoomLevel={zoomLevel} viewStartDate={viewStartDate} />
             <div className="mt-6 flex justify-end gap-4">
                 <Button onClick={() => onOpenTaskModal()} variant="primary"><Plus size={20} className="mr-2" /> Nova Tarefa</Button>
             </div>
@@ -1418,7 +1437,7 @@ const LoginScreen = () => {
         <div className="flex items-center justify-center min-h-screen bg-gray-50">
             <div className="p-8 bg-white rounded-2xl shadow-xl max-w-md w-full">
                 <h1 className="text-4xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-cyan-600 mb-2">
-                    Roadmap Ágil
+                    Norte Estratégico
                 </h1>
                 <p className="text-center text-gray-600 mb-6">Seu planejamento estratégico em um só lugar.</p>
                 
@@ -1466,9 +1485,11 @@ export default function App() {
     const [error, setError] = useState(null);
     const [tasks, setTasks] = useState([]);
     const [okrs, setOkrs] = useState([]);
+    const [cycles, setCycles] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [view, setView] = useState('okr');
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+    const [isCyclesModalOpen, setIsCyclesModalOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState(null);
     const [filters, setFilters] = useState({ priority: 'Todos', status: 'Todos', label: 'Todos' });
     const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
@@ -1492,12 +1513,15 @@ export default function App() {
         if (!user) {
             setTasks([]);
             setOkrs([]);
+            setCycles([]);
             return;
         };
 
         const userId = user.uid;
         const tasksCollectionPath = `artifacts/${appId}/users/${userId}/roadmap_tasks`;
         const okrsCollectionPath = `artifacts/${appId}/users/${userId}/okrs`;
+        const cyclesCollectionPath = `artifacts/${appId}/users/${userId}/cycles`;
+
 
         const unsubscribeTasks = onSnapshot(query(collection(db, tasksCollectionPath)), (snapshot) => {
             setTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -1515,7 +1539,12 @@ export default function App() {
             setOkrs(okrData);
         }, (err) => { console.error("Error fetching OKRs:", err); setError("Falha ao carregar OKRs."); });
 
-        return () => { unsubscribeTasks(); unsubscribeOkrs(); };
+        const unsubscribeCycles = onSnapshot(query(collection(db, cyclesCollectionPath)), (snapshot) => {
+            setCycles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        }, (err) => { console.error("Error fetching cycles:", err); setError("Falha ao carregar ciclos."); });
+
+
+        return () => { unsubscribeTasks(); unsubscribeOkrs(); unsubscribeCycles(); };
     }, [user, appId]);
 
     const handleSaveTask = async (taskData) => {
@@ -1558,6 +1587,24 @@ export default function App() {
             await addDoc(collection(db, collectionPath), { ...dataToAdd, createdAt: serverTimestamp() });
         }
     };
+
+    const handleSaveCycle = async (cycleData) => {
+        if (!user) return;
+        const collectionPath = `artifacts/${appId}/users/${user.uid}/cycles`;
+        if (cycleData.id) {
+            const { id, ...dataToUpdate } = cycleData;
+            await updateDoc(doc(db, collectionPath, id), dataToUpdate);
+        } else {
+            await addDoc(collection(db, collectionPath), cycleData);
+        }
+    };
+
+    const handleDeleteCycle = async (cycleId) => {
+        if (!user) return;
+        const collectionPath = `artifacts/${appId}/users/${user.uid}/cycles`;
+        await deleteDoc(doc(db, collectionPath, cycleId));
+    };
+
 
     const requestDelete = (id, type) => {
         setItemToDelete({ id, type });
@@ -1608,7 +1655,7 @@ export default function App() {
                 <header className="mb-6 no-print">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                         <div>
-                            <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-cyan-600">Roadmap Ágil Interativo</h1>
+                            <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-cyan-600">Norte Estratégico</h1>
                             <p className="text-gray-600 mt-1">Planeje, execute e apresente com clareza e foco.</p>
                         </div>
                         <div className="flex items-center gap-4">
@@ -1631,6 +1678,7 @@ export default function App() {
                     {view === 'workspace' && (
                         <WorkspaceView
                             tasks={filteredTasks}
+                            cycles={cycles}
                             onTaskClick={handleOpenTaskModal}
                             filters={filters}
                             setFilters={setFilters}
@@ -1639,6 +1687,7 @@ export default function App() {
                             viewStartDate={viewStartDate}
                             setViewStartDate={setViewStartDate}
                             onOpenTaskModal={handleOpenTaskModal}
+                            onOpenCyclesModal={() => setIsCyclesModalOpen(true)}
                         />
                     )}
                     {view === 'okr' && (
