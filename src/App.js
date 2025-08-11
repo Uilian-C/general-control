@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, serverTimestamp } from 'firebase/firestore';
-import { Target, Layers, Briefcase, Edit, Plus, Trash2, X, Settings, Tag, Palette, TrendingUp, Download, Calendar, ListTodo, ZoomIn, ZoomOut, ChevronsUpDown, CheckCircle, MoreVertical, History, Check, Zap, ChevronDown, LayoutGrid, List, AlertTriangle, Clock, TrendingUp as TrendingUpIcon, Lock, Unlock } from 'lucide-react';
+import { Target, Layers, Briefcase, Edit, Plus, Trash2, X, Settings, Tag, Palette, TrendingUp, Download, Calendar, ListTodo, ZoomIn, ZoomOut, ChevronsUpDown, CheckCircle, MoreVertical, History, Check, Zap, ChevronDown, LayoutGrid, List, AlertTriangle, Clock, TrendingUp as TrendingUpIcon, Lock, Unlock, Gauge } from 'lucide-react';
 
 // --- ATENÇÃO: Para a funcionalidade de exportar PDF funcionar ---
 // Adicione estas duas linhas no <head> do seu arquivo HTML principal (ex: index.html)
@@ -43,9 +43,11 @@ const STATUSES = {
 };
 const TASK_COLORS = ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#c084fc', '#f472b6', '#a3a3a3'];
 
-const formatDate = (dateInput, includeTime = true) => {
+const formatDate = (dateInput, includeTime = false) => {
   if (!dateInput) return '';
   const date = dateInput.toDate ? dateInput.toDate() : new Date(dateInput);
+  // Adiciona um dia para corrigir a exibição de datas UTC no fuso local
+  date.setUTCDate(date.getUTCDate() + 1);
   const options = {
     day: '2-digit',
     month: '2-digit',
@@ -73,7 +75,7 @@ const getDaysInView = (startDate, endDate) => {
     return days;
 };
 
-// --- Lógica de Cálculo de Progresso ---
+// --- Lógica de Cálculo de Progresso e Ritmo ---
 const calculateKrProgress = (kr) => {
     const start = Number(kr.startValue) || 0;
     const target = Number(kr.targetValue) || 100;
@@ -95,6 +97,67 @@ const calculateOkrProgress = (okr) => {
     }, 0);
     return Math.round(weightedProgressSum / totalWeight);
 };
+
+// NOVA FUNÇÃO: Calcula o ritmo necessário e dias restantes para um KR
+const calculatePacingInfo = (startDate, targetDate, startValue, targetValue, currentValue) => {
+    if (!startDate || !targetDate) {
+        return { daysRemaining: null, requiredPace: null, status: 'no-date' };
+    }
+
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const target = new Date(targetDate);
+    target.setUTCHours(0, 0, 0, 0);
+
+    const progress = calculateKrProgress({ startValue, targetValue, currentValue });
+    if (progress >= 100) {
+        return { daysRemaining: null, requiredPace: null, status: 'completed' };
+    }
+    
+    if (target < today) {
+        return { daysRemaining: 0, requiredPace: null, status: 'overdue' };
+    }
+
+    const daysRemaining = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const monthsRemaining = Math.max(1, (target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 30.44)); 
+    const remainingValue = (Number(targetValue) || 0) - (Number(currentValue) || 0);
+    
+    if (remainingValue <= 0) {
+         return { daysRemaining, requiredPace: 0, status: 'completed' };
+    }
+
+    const requiredPace = (remainingValue / monthsRemaining);
+
+    return { daysRemaining, requiredPace: requiredPace.toFixed(1), status: 'on-track' };
+};
+
+// NOVA FUNÇÃO: Calcula o status geral de um OKR (progresso vs. tempo)
+const calculateOkrStatus = (startDate, targetDate, currentProgress) => {
+    if (!startDate || !targetDate) return { status: 'no-date', text: 'Sem data alvo', color: 'bg-gray-400' };
+
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const start = new Date(startDate);
+    start.setUTCHours(0, 0, 0, 0);
+    const target = new Date(targetDate);
+    target.setUTCHours(0, 0, 0, 0);
+
+    if (currentProgress >= 100) return { status: 'completed', text: 'Concluído', color: 'bg-green-500' };
+    if (target < today) return { status: 'overdue', text: 'Atrasado', color: 'bg-red-500' };
+    if (today < start) return { status: 'not-started', text: 'Não iniciado', color: 'bg-gray-400' };
+    
+    const totalDuration = target.getTime() - start.getTime();
+    if (totalDuration <= 0) return { status: 'completed', text: 'Concluído', color: 'bg-green-500' };
+
+    const elapsedDuration = today.getTime() - start.getTime();
+    const expectedProgress = Math.round((elapsedDuration / totalDuration) * 100);
+    const difference = currentProgress - expectedProgress;
+
+    if (difference < -15) return { status: 'behind', text: 'Em Risco', color: 'bg-yellow-500' };
+    if (difference > 15) return { status: 'ahead', text: 'Adiantado', color: 'bg-sky-500' };
+    return { status: 'on-track', text: 'No Ritmo', color: 'bg-green-500' };
+};
+
 
 const calculateTaskProgress = (task) => {
     if (task.status === 'Concluído') return 100;
@@ -995,7 +1058,7 @@ const KrHistoryModal = ({ isOpen, onClose, kr, onDeleteUpdate }) => {
                             <li key={update.date} className="flex items-center justify-between p-3 bg-gray-100 rounded-lg">
                                 <div>
                                     <span className="font-semibold text-indigo-700">Valor: {update.value}</span>
-                                    <p className="text-sm text-gray-500">Registrado em: {formatDate(new Date(update.date))}</p>
+                                    <p className="text-sm text-gray-500">Registrado em: {formatDate(new Date(update.date), true)}</p>
                                 </div>
                                 <Button onClick={() => onDeleteUpdate(kr.id, update.date)} variant="ghost" className="!p-2 text-red-500 hover:bg-red-100"><Trash2 size={16} /></Button>
                             </li>
@@ -1052,7 +1115,7 @@ const KrAttentionModal = ({ isOpen, onClose, kr, onSaveAttentionLog }) => {
                         <div key={item.id} className={`p-3 rounded-lg ${item.resolved ? 'bg-green-50' : 'bg-red-50'}`}>
                             <p className={`text-sm ${item.resolved ? 'text-gray-500 line-through' : 'text-gray-800'}`}>{item.text}</p>
                             <div className="flex justify-between items-center mt-2">
-                                <p className="text-xs text-gray-400">{formatDate(new Date(item.date))}</p>
+                                <p className="text-xs text-gray-400">{formatDate(new Date(item.date), true)}</p>
                                 <div className="flex gap-2">
                                     <Button onClick={() => handleToggleResolve(item.id)} variant="ghost" className={`!p-1 h-7 w-7 ${item.resolved ? 'text-yellow-600' : 'text-green-600'}`}>{item.resolved ? <X size={16}/> : <Check size={16} />}</Button>
                                     <Button onClick={() => handleDelete(item.id)} variant="ghost" className="!p-1 h-7 w-7 text-red-500"><Trash2 size={16} /></Button>
@@ -1066,13 +1129,22 @@ const KrAttentionModal = ({ isOpen, onClose, kr, onSaveAttentionLog }) => {
     );
 };
 
-const KrItem = ({ kr, onUpdate, onDeleteUpdate, onSaveAttentionLog }) => {
+const KrItem = ({ kr, okrStartDate, okrTargetDate, onUpdate, onDeleteUpdate, onSaveAttentionLog }) => {
     const [isUpdating, setIsUpdating] = useState(false);
     const [newValue, setNewValue] = useState(kr.currentValue);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [isAttentionOpen, setIsAttentionOpen] = useState(false);
+    
     const progress = calculateKrProgress(kr);
     const hasActiveAttention = (kr.attentionLog || []).some(log => !log.resolved);
+    
+    const pacingInfo = useMemo(() => calculatePacingInfo(
+        okrStartDate,
+        okrTargetDate,
+        kr.startValue,
+        kr.targetValue,
+        kr.currentValue
+    ), [okrStartDate, okrTargetDate, kr.startValue, kr.targetValue, kr.currentValue]);
 
     const handleUpdate = () => {
         onUpdate(kr.id, newValue);
@@ -1083,7 +1155,7 @@ const KrItem = ({ kr, onUpdate, onDeleteUpdate, onSaveAttentionLog }) => {
         <>
             <KrHistoryModal isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} kr={kr} onDeleteUpdate={onDeleteUpdate} />
             <KrAttentionModal isOpen={isAttentionOpen} onClose={() => setIsAttentionOpen(false)} kr={kr} onSaveAttentionLog={onSaveAttentionLog} />
-            <div className="p-4 bg-white rounded-lg border border-gray-200 hover:border-gray-300 transition-all">
+            <div className="p-4 bg-white rounded-lg border border-gray-200 hover:border-gray-300 transition-all space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                     <p className="font-medium text-gray-800 flex-1">{kr.text}</p>
                     <div className="flex items-center gap-4 mt-2 sm:mt-0">
@@ -1110,6 +1182,23 @@ const KrItem = ({ kr, onUpdate, onDeleteUpdate, onSaveAttentionLog }) => {
                 <div className="mt-2">
                     <div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div></div>
                 </div>
+                {/* NOVA SEÇÃO: Informações de Ritmo e Prazos */}
+                {pacingInfo.status !== 'no-date' && (
+                    <div className="flex justify-between items-center text-xs text-gray-500 border-t pt-2 mt-2">
+                        <div className="flex items-center gap-1">
+                            <Clock size={14} />
+                            <span>
+                                {pacingInfo.daysRemaining !== null ? `${pacingInfo.daysRemaining} dias restantes` : (pacingInfo.status === 'completed' ? 'Meta atingida' : 'Prazo encerrado')}
+                            </span>
+                        </div>
+                        {pacingInfo.requiredPace !== null && pacingInfo.status === 'on-track' && (
+                            <div className="flex items-center gap-1" title="Ritmo necessário por mês para atingir a meta">
+                                <Gauge size={14} />
+                                <span>{pacingInfo.requiredPace}/mês</span>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         </>
     );
@@ -1212,6 +1301,7 @@ const OkrView = ({ okrs, onSave, onDelete }) => {
                     {okrs.map(okr => {
                         const progress = calculateOkrProgress(okr);
                         const isExpanded = !!expandedOkrs[okr.id];
+                        const okrStatus = calculateOkrStatus(okr.startDate, okr.targetDate, progress);
                         return (
                             <Card key={okr.id} className={`transition-all duration-300 overflow-hidden ${layout === 'list' ? '!p-0' : ''}`}>
                                 <div className={layout === 'list' ? 'p-6' : 'p-0'}>
@@ -1220,6 +1310,17 @@ const OkrView = ({ okrs, onSave, onDelete }) => {
                                         <div className="flex space-x-2">
                                             <Button onClick={(e) => { e.stopPropagation(); handleEdit(okr); }} variant="ghost" className="!p-2"><Edit size={16} /></Button>
                                             <Button onClick={(e) => { e.stopPropagation(); requestDeleteOkr(okr.id); }} variant="ghost" className="!p-2 text-red-500 hover:bg-red-50"><Trash2 size={16} /></Button>
+                                        </div>
+                                    </div>
+                                    {/* NOVA SEÇÃO: Informações de Data e Status do OKR */}
+                                    <div className="mt-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-sm text-gray-500">
+                                        <div className="flex items-center gap-2">
+                                            <Calendar size={14} />
+                                            <span>{formatDate(okr.startDate)} - {formatDate(okr.targetDate)}</span>
+                                        </div>
+                                        <div className={`flex items-center gap-2 px-2 py-1 text-xs font-semibold text-white rounded-full ${okrStatus.color}`}>
+                                            <TrendingUpIcon size={14} />
+                                            <span>{okrStatus.text}</span>
                                         </div>
                                     </div>
                                     
@@ -1237,6 +1338,8 @@ const OkrView = ({ okrs, onSave, onDelete }) => {
                                         <div className="px-6 space-y-3">
                                             {okr.keyResults.map(kr => (
                                                 <KrItem key={kr.id} kr={kr} 
+                                                    okrStartDate={okr.startDate}
+                                                    okrTargetDate={okr.targetDate}
                                                     onUpdate={(krId, newValue) => handleKrUpdate(okr, krId, newValue)} 
                                                     onDeleteUpdate={(krId, updateId) => handleDeleteUpdate(okr, krId, updateId)}
                                                     onSaveAttentionLog={(krId, attentionLog) => handleSaveAttentionLog(okr, krId, attentionLog)}
@@ -1262,7 +1365,7 @@ export default function App() {
     const [tasks, setTasks] = useState([]);
     const [okrs, setOkrs] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [view, setView] = useState('workspace');
+    const [view, setView] = useState('okr');
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState(null);
     const [filters, setFilters] = useState({ priority: 'Todos', status: 'Todos', label: 'Todos' });
