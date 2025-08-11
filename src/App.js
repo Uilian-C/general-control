@@ -598,9 +598,9 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
     const [startX, setStartX] = useState(0);
     const [scrollLeft, setScrollLeft] = useState(0);
     
-    const dayWidth = useMemo(() => 20 + (zoomLevel * 4), [zoomLevel]);
+    const dayWidth = useMemo(() => 8 + (zoomLevel * 2.5), [zoomLevel]);
     
-    const { days, timelineWidth, headerGroups, todayPosition } = useMemo(() => {
+    const { days, timelineWidth, headerGroups, subHeaderGroups, todayPosition } = useMemo(() => {
         let maxEndDate = null;
         const allDates = [...tasks, ...cycles].map(item => new Date(item.endDate));
         if (allDates.length > 0) {
@@ -611,55 +611,82 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
         }
 
         const defaultEndDate = new Date(viewStartDate);
-        defaultEndDate.setDate(defaultEndDate.getDate() + 45);
+        defaultEndDate.setDate(defaultEndDate.getDate() + 90);
 
         let timelineEndDate = defaultEndDate;
         if (maxEndDate && maxEndDate > defaultEndDate) {
             timelineEndDate = new Date(maxEndDate);
         }
         
-        timelineEndDate.setDate(timelineEndDate.getDate() + 15);
+        timelineEndDate.setDate(timelineEndDate.getDate() + 30);
 
         const days = getDaysInView(viewStartDate, timelineEndDate);
         const timelineWidth = days.length * dayWidth;
         
-        const groups = [];
+        const primaryGroups = [];
+        const secondaryGroups = [];
+        
         if (days.length > 0) {
-            let currentGroup = null;
-            if (dayWidth < 25) { 
-                days.forEach(day => {
-                    const monthKey = `${day.getFullYear()}-${day.getMonth()}`;
-                    if (!currentGroup || currentGroup.key !== monthKey) {
-                        currentGroup = { key: monthKey, label: new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(day), width: 0 };
-                        groups.push(currentGroup);
-                    }
-                    currentGroup.width += dayWidth;
-                });
-            } else if (dayWidth < 50) { 
+            let currentPrimaryGroup = null;
+            let currentSecondaryGroup = null;
+
+            // Nível de Zoom: Trimestre / Mês
+            if (zoomLevel <= 3) {
                 days.forEach(day => {
                     const year = day.getFullYear();
-                    const weekNumber = Math.ceil((((day - new Date(year, 0, 1)) / 86400000) + new Date(year, 0, 1).getDay() + 1) / 7);
-                    const weekKey = `${year}-W${weekNumber}`;
-                    if (!currentGroup || currentGroup.key !== weekKey) {
-                        currentGroup = { key: weekKey, label: `Semana ${weekNumber}`, width: 0 };
-                        groups.push(currentGroup);
+                    const quarter = Math.floor(day.getMonth() / 3) + 1;
+                    const quarterKey = `${year}-Q${quarter}`;
+                    
+                    if (!currentPrimaryGroup || currentPrimaryGroup.key !== quarterKey) {
+                        currentPrimaryGroup = { key: quarterKey, label: `T${quarter} ${year}`, width: 0 };
+                        primaryGroups.push(currentPrimaryGroup);
                     }
-                    currentGroup.width += dayWidth;
+                    currentPrimaryGroup.width += dayWidth;
+                    
+                    const monthKey = `${year}-${day.getMonth()}`;
+                    if(!currentSecondaryGroup || currentSecondaryGroup.key !== monthKey) {
+                        currentSecondaryGroup = { key: monthKey, label: new Intl.DateTimeFormat('pt-BR', { month: 'long', timeZone: 'UTC' }).format(day), width: 0 };
+                        secondaryGroups.push(currentSecondaryGroup);
+                    }
+                    currentSecondaryGroup.width += dayWidth;
                 });
-            } else { 
+            } 
+            // Nível de Zoom: Mês / Dia
+            else if (zoomLevel <= 7) {
                 days.forEach(day => {
-                    groups.push({ key: day.toISOString(), label: day.getDate(), subLabel: new Intl.DateTimeFormat('pt-BR', { weekday: 'short', timeZone: 'UTC' }).format(day).slice(0, 3), width: dayWidth, isToday: day.toDateString() === today.toDateString() });
+                    const monthKey = `${day.getFullYear()}-${day.getMonth()}`;
+                    if (!currentPrimaryGroup || currentPrimaryGroup.key !== monthKey) {
+                        currentPrimaryGroup = { key: monthKey, label: new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(day), width: 0 };
+                        primaryGroups.push(currentPrimaryGroup);
+                    }
+                    currentPrimaryGroup.width += dayWidth;
+                    
+                    secondaryGroups.push({ key: day.toISOString(), label: day.getDate(), width: dayWidth, isToday: day.toDateString() === today.toDateString() });
+                });
+            }
+            // Nível de Zoom: Dia / Dia da Semana
+            else {
+                 days.forEach(day => {
+                    const weekNumber = Math.ceil((((day - new Date(day.getFullYear(), 0, 1)) / 86400000) + new Date(day.getFullYear(), 0, 1).getDay() + 1) / 7);
+                    const weekKey = `${day.getFullYear()}-W${weekNumber}`;
+                     if (!currentPrimaryGroup || currentPrimaryGroup.key !== weekKey) {
+                        currentPrimaryGroup = { key: weekKey, label: `Semana ${weekNumber}`, width: 0 };
+                        primaryGroups.push(currentPrimaryGroup);
+                    }
+                    currentPrimaryGroup.width += dayWidth;
+
+                    secondaryGroups.push({ key: day.toISOString(), label: day.getDate(), subLabel: new Intl.DateTimeFormat('pt-BR', { weekday: 'short', timeZone: 'UTC' }).format(day).slice(0, 3), width: dayWidth, isToday: day.toDateString() === today.toDateString() });
                 });
             }
         }
         
         const todayPos = (today.getTime() - new Date(viewStartDate).setUTCHours(0,0,0,0)) / (1000 * 60 * 60 * 24) * dayWidth;
         
-        return { days, timelineWidth, headerGroups: groups, todayPosition: todayPos };
-    }, [viewStartDate, dayWidth, tasks, cycles]);
+        return { days, timelineWidth, headerGroups: primaryGroups, subHeaderGroups: secondaryGroups, todayPosition: todayPos };
+    }, [viewStartDate, zoomLevel, tasks, cycles]);
 
     const onMouseDown = (e) => {
-        if (!timelineRef.current) return;
+        if (!timelineRef.current || e.target.closest('.task-bar')) return;
         setIsDragging(true);
         setStartX(e.pageX - timelineRef.current.offsetLeft);
         setScrollLeft(timelineRef.current.scrollLeft);
@@ -694,11 +721,14 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
 
     return (
         <div className="relative bg-white border border-gray-200 rounded-lg shadow-sm">
-            <div className="overflow-x-auto cursor-grab" ref={timelineRef} onMouseDown={onMouseDown} onMouseLeave={onMouseLeaveOrUp} onMouseUp={onMouseMove} onMouseMove={onMouseMove}>
+            <div className="overflow-x-auto cursor-grab" ref={timelineRef} onMouseDown={onMouseDown} onMouseLeave={onMouseLeaveOrUp} onMouseUp={onMouseLeaveOrUp} onMouseMove={onMouseMove}>
                 <div style={{ width: timelineWidth }} className="relative">
-                    <div className="sticky top-0 z-20 bg-gray-50 h-12">
-                        <div className="flex border-b-2 border-gray-200">
-                             {Array.isArray(headerGroups) && headerGroups.map((group) => (<div key={group.key} className="flex-shrink-0 text-center font-semibold text-gray-700 border-r border-gray-200 py-1 flex flex-col justify-center items-center" style={{ width: group.width }}><span className={`text-xs ${group.isToday ? 'text-indigo-600' : 'text-gray-500'}`}>{group.subLabel}</span><span className={`whitespace-nowrap ${group.isToday ? 'text-indigo-600 font-bold' : ''}`}>{group.label}</span></div>))}
+                    <div className="sticky top-0 z-20 bg-gray-100/80 backdrop-blur-sm h-16">
+                        <div className="flex border-b border-gray-300 h-8">
+                             {headerGroups.map((group) => (<div key={group.key} className="flex-shrink-0 text-center font-bold text-gray-700 border-r border-gray-300 flex items-center justify-center" style={{ width: group.width }}><span className="whitespace-nowrap px-2">{group.label}</span></div>))}
+                        </div>
+                        <div className="flex border-b-2 border-gray-300 h-8">
+                             {subHeaderGroups.map((group) => (<div key={group.key} className={`flex-shrink-0 text-center font-semibold border-r border-gray-200 flex flex-col justify-center items-center ${group.isToday ? 'bg-indigo-100' : ''}`} style={{ width: group.width }}><span className={`text-xs ${group.isToday ? 'text-indigo-600' : 'text-gray-500'}`}>{group.subLabel}</span><span className={`whitespace-nowrap text-sm ${group.isToday ? 'text-indigo-600 font-bold' : 'text-gray-600'}`}>{group.label}</span></div>))}
                         </div>
                     </div>
                     <div className="absolute top-0 left-0 w-full h-full z-0">
@@ -715,7 +745,7 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                              const width = duration * dayWidth;
 
                              return (
-                                <div key={cycle.id} className="absolute top-12 bottom-0 z-0" style={{ left: `${left}px`, width: `${width}px` }}>
+                                <div key={cycle.id} className="absolute top-16 bottom-0 z-0" style={{ left: `${left}px`, width: `${width}px` }}>
                                     <div className="h-full w-full border-x" style={{ backgroundColor: cycle.color, opacity: 0.15, borderColor: cycle.color }}></div>
                                     <div className="absolute -top-0.5 left-0 w-full font-bold text-center text-xs p-1" style={{ color: cycle.color }}>{cycle.name}</div>
                                 </div>
@@ -727,7 +757,7 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                             const isCollapsed = collapsedGroups[group];
                             return (
                                 <div key={group}>
-                                    <div className="sticky top-[48px] z-20 flex items-center h-10 bg-white/80 backdrop-blur-sm border-b border-t border-gray-200 -ml-px" onClick={() => toggleGroup(group)}>
+                                    <div className="sticky top-[64px] z-10 flex items-center h-10 bg-white/80 backdrop-blur-sm border-b border-t border-gray-200 -ml-px" onClick={() => toggleGroup(group)}>
                                         <div className="flex items-center gap-2 p-2 cursor-pointer"><ChevronsUpDown size={16} className={`transition-transform ${isCollapsed ? '-rotate-90' : ''}`} /><h3 className="font-bold text-gray-800">{group}</h3></div>
                                     </div>
                                     {!isCollapsed && (
@@ -741,7 +771,7 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                                                 const daysRemaining = Math.ceil((taskEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
                                                 
                                                 return (
-                                                    <div key={task.id} id={`task-${task.id}`} className="h-10 absolute flex items-center rounded-lg cursor-pointer transition-all duration-200 group" style={{ top: `${taskIndex * 48 + 5}px`, left: `${left}px`, width: `${width}px` }} onClick={() => onTaskClick(task)} title={`${task.title} - ${task.status} (${Math.round(progress)}%)`}>
+                                                    <div key={task.id} id={`task-${task.id}`} className="h-10 absolute flex items-center rounded-lg cursor-pointer transition-all duration-200 group task-bar" style={{ top: `${taskIndex * 48 + 5}px`, left: `${left}px`, width: `${width}px` }} onClick={() => onTaskClick(task)} title={`${task.title} - ${task.status} (${Math.round(progress)}%)`}>
                                                         <div 
                                                             className={`h-full w-full rounded-lg flex items-center overflow-hidden relative shadow-md group-hover:shadow-lg group-hover:scale-[1.02] transition-all duration-200`}
                                                             style={{ 
