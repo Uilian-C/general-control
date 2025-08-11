@@ -633,8 +633,9 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                              const width = duration * dayWidth;
 
                              return (
-                                <div key={cycle.id} className="absolute top-12 h-full z-0" style={{ left: `${left}px`, width: `${width}px`, backgroundColor: cycle.color, opacity: 0.2 }}>
-                                    <div className="sticky top-12 font-semibold text-gray-600 p-1 text-center">{cycle.name}</div>
+                                <div key={cycle.id} className="absolute top-12 bottom-0 z-0" style={{ left: `${left}px`, width: `${width}px` }}>
+                                    <div className="h-full w-full border-x" style={{ backgroundColor: cycle.color, opacity: 0.15, borderColor: cycle.color }}></div>
+                                    <div className="absolute -top-0.5 left-0 w-full font-bold text-center text-xs p-1" style={{ color: cycle.color }}>{cycle.name}</div>
                                 </div>
                              )
                         })}
