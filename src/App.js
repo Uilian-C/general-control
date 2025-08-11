@@ -222,6 +222,93 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, children }) => {
     );
 };
 
+// --- [NOVO] Modal de Gestão de Ciclos ---
+const CyclesModal = ({ isOpen, onClose, cycles, onSave, onDelete }) => {
+    const [localCycles, setLocalCycles] = useState([]);
+
+    useEffect(() => {
+        if (isOpen) {
+            setLocalCycles(cycles.map(c => ({...c, localId: c.id || `new_${Date.now()}_${Math.random()}`})));
+        }
+    }, [isOpen, cycles]);
+
+    const handleCycleChange = (index, field, value) => {
+        const updatedCycles = [...localCycles];
+        updatedCycles[index][field] = value;
+        setLocalCycles(updatedCycles);
+    };
+
+    const addCycle = () => {
+        const today = new Date().toISOString().split('T')[0];
+        setLocalCycles([...localCycles, {
+            localId: `new_${Date.now()}_${Math.random()}`,
+            name: '',
+            startDate: today,
+            endDate: today,
+            color: CYCLE_COLORS[localCycles.length % CYCLE_COLORS.length]
+        }]);
+    };
+
+    const removeCycle = (cycleToRemove) => {
+        if (cycleToRemove.id) {
+            onDelete(cycleToRemove.id);
+        }
+        setLocalCycles(localCycles.filter(c => c.localId !== cycleToRemove.localId));
+    };
+
+    const handleSaveAll = () => {
+        const cyclesToSave = localCycles.filter(c => c.name.trim() !== '');
+        onSave(cyclesToSave);
+        onClose();
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Gerenciar Ciclos de Trabalho" size="2xl">
+            <div className="space-y-4">
+                <p className="text-gray-600">Crie e gerencie os ciclos (Sprints, PIs, Trimestres) que aparecerão como fundo no seu Roadmap.</p>
+                <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                    {localCycles.map((cycle, index) => (
+                        <div key={cycle.localId} className="p-4 bg-gray-50 rounded-lg border flex flex-col md:flex-row gap-4 items-center">
+                            <input
+                                type="text"
+                                placeholder="Nome do Ciclo (Ex: Sprint 1)"
+                                value={cycle.name}
+                                onChange={(e) => handleCycleChange(index, 'name', e.target.value)}
+                                className="w-full p-2 border rounded-md"
+                            />
+                            <input
+                                type="date"
+                                value={cycle.startDate}
+                                onChange={(e) => handleCycleChange(index, 'startDate', e.target.value)}
+                                className="p-2 border rounded-md"
+                            />
+                            <input
+                                type="date"
+                                value={cycle.endDate}
+                                onChange={(e) => handleCycleChange(index, 'endDate', e.target.value)}
+                                className="p-2 border rounded-md"
+                            />
+                            <input
+                                type="color"
+                                value={cycle.color}
+                                onChange={(e) => handleCycleChange(index, 'color', e.target.value)}
+                                className="p-1 h-10 w-12 border rounded-md cursor-pointer"
+                            />
+                            <Button onClick={() => removeCycle(cycle)} variant="ghost" className="text-red-500"><Trash2 size={16} /></Button>
+                        </div>
+                    ))}
+                </div>
+                <Button onClick={addCycle} variant="secondary"><Plus size={16} /> Adicionar Ciclo</Button>
+            </div>
+            <footer className="flex justify-end space-x-4 pt-4 mt-4 border-t">
+                <Button onClick={onClose} variant="secondary">Cancelar</Button>
+                <Button onClick={handleSaveAll} variant="primary">Salvar Ciclos</Button>
+            </footer>
+        </Modal>
+    );
+};
+
+
 const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest }) => {
     const getInitialFormState = () => {
         const today = new Date().toISOString().split('T')[0];
@@ -1582,14 +1669,17 @@ export default function App() {
         }
     };
 
-    const handleSaveCycle = async (cycleData) => {
+    const handleSaveCycles = async (cyclesToSave) => {
         if (!user) return;
         const collectionPath = `artifacts/${appId}/users/${user.uid}/cycles`;
-        if (cycleData.id) {
-            const { id, ...dataToUpdate } = cycleData;
-            await updateDoc(doc(db, collectionPath, id), dataToUpdate);
-        } else {
-            await addDoc(collection(db, collectionPath), cycleData);
+        
+        for (const cycle of cyclesToSave) {
+            const { localId, ...data } = cycle;
+            if (cycle.id) {
+                await updateDoc(doc(db, collectionPath, cycle.id), data);
+            } else {
+                await addDoc(collection(db, collectionPath), data);
+            }
         }
     };
 
@@ -1700,6 +1790,13 @@ export default function App() {
                     okrs={okrs}
                     onSave={handleSaveTask}
                     onDeleteRequest={requestDelete}
+                />
+                <CyclesModal 
+                    isOpen={isCyclesModalOpen}
+                    onClose={() => setIsCyclesModalOpen(false)}
+                    cycles={cycles}
+                    onSave={handleSaveCycles}
+                    onDelete={handleDeleteCycle}
                 />
                 <ConfirmModal
                     isOpen={isConfirmDeleteOpen}
