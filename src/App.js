@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, serverTimestamp } from 'firebase/firestore';
-import { Target, Layers, Briefcase, Edit, Plus, Trash2, X, Settings, Tag, Palette, TrendingUp, Download, Calendar, ListTodo, ZoomIn, ZoomOut, ChevronsUpDown, CheckCircle, MoreVertical, History, Check, Zap, ChevronDown, LayoutGrid, List, AlertTriangle, Clock, TrendingUp as TrendingUpIcon, Lock, Unlock, Gauge, LogOut, User,LogIn, ArrowRight, Repeat } from 'lucide-react';
+import { Target, Layers, Briefcase, Edit, Plus, Trash2, X, Settings, Tag, Palette, TrendingUp, Download, Calendar, ListTodo, ZoomIn, ZoomOut, ChevronsUpDown, CheckCircle, MoreVertical, History, Check, Zap, ChevronDown, LayoutGrid, List, AlertTriangle, Clock, TrendingUp as TrendingUpIcon, Lock, Unlock, Gauge, LogOut, User,LogIn, ArrowRight, Repeat, Presentation } from 'lucide-react';
 
 // --- ATENÇÃO: Para a funcionalidade de exportar PDF funcionar ---
 // Adicione estas duas linhas no <head> do seu arquivo HTML principal (ex: index.html)
@@ -1379,6 +1379,7 @@ const KrItem = ({ kr, okrStartDate, okrTargetDate, onUpdate, onDeleteUpdate, onS
     );
 };
 
+// --- Componente OkrView ---
 const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
     const [layout, setLayout] = useState('list');
     const [isFormOpen, setIsFormOpen] = useState(false);
@@ -1598,6 +1599,7 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
     );
 };
 
+
 // --- Componente de Login ---
 const LoginScreen = () => {
     const [isLoginView, setIsLoginView] = useState(true);
@@ -1708,7 +1710,6 @@ const TaskCard = ({ task, onTaskClick }) => {
             onClick={() => onTaskClick(task)}
             className={`bg-white rounded-lg p-4 shadow-md border-l-4 ${isBlocked ? 'border-red-500' : (PRIORITIES[task.priority]?.borderColor || 'border-transparent')} cursor-pointer hover:shadow-lg hover:bg-gray-50 transition-all duration-200 space-y-3`}
         >
-            {/* Cabeçalho do Card */}
             <div className="flex justify-between items-start">
                 <span className="text-xs font-semibold bg-gray-100 text-gray-700 px-2 py-1 rounded">{task.projectTag || 'Geral'}</span>
                 <div className="flex items-center gap-2">
@@ -1717,13 +1718,11 @@ const TaskCard = ({ task, onTaskClick }) => {
                 </div>
             </div>
 
-            {/* Título da Tarefa */}
             <div>
                 <p className="font-semibold text-gray-800">{task.title}</p>
                 <p className="text-xs text-gray-400 font-mono mt-1">ID: {task.humanId}</p>
             </div>
 
-            {/* Rodapé do Card */}
             <div className="flex justify-between items-center text-xs text-gray-500 pt-2 border-t border-gray-100">
                 <div className="flex items-center gap-1.5" title="Prazo Final">
                     <Calendar size={14} />
@@ -1806,7 +1805,6 @@ const TasksView = ({ tasks, onTaskClick, filters, setFilters }) => {
         </div>
     );
 };
-
 // --- FIM DOS NOVOS COMPONENTES ---
 
 // --- Componente Principal ---
@@ -1818,7 +1816,7 @@ export default function App() {
     const [okrs, setOkrs] = useState([]);
     const [cycles, setCycles] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [view, setView] = useState('tasks'); // Mudei a visão padrão para a nova aba
+    const [view, setView] = useState('tasks');
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
     const [isCyclesModalOpen, setIsCyclesModalOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState(null);
@@ -1983,7 +1981,7 @@ export default function App() {
     return (
         <div className="bg-gray-50 text-gray-800 min-h-screen p-4 md:p-6 font-sans">
             <div className="max-w-full mx-auto">
-                <header className="mb-6 no-print">
+                <header className="mb-6">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                         <div>
                             <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-cyan-600">Norte Estratégico</h1>
