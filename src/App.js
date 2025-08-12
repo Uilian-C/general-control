@@ -31,15 +31,15 @@ const db = getFirestore(app);
 
 // --- Constantes e Helpers ---
 const PRIORITIES = {
-  'Alta': { label: 'Alta', color: 'bg-red-400' },
-  'Média': { label: 'Média', color: 'bg-yellow-400' },
-  'Baixa': { label: 'Baixa', color: 'bg-blue-400' },
+  'Alta': { label: 'Alta', color: 'bg-red-500', textColor: 'text-red-500' },
+  'Média': { label: 'Média', color: 'bg-yellow-500', textColor: 'text-yellow-500' },
+  'Baixa': { label: 'Baixa', color: 'bg-blue-500', textColor: 'text-blue-500' },
 };
 const STATUSES = {
-  'A Fazer': { label: 'A Fazer', color: 'bg-gray-200 text-gray-800', iconColor: 'text-gray-400' },
-  'Em Progresso': { label: 'Em Progresso', color: 'bg-indigo-200 text-indigo-800', iconColor: 'text-indigo-400' },
-  'Concluído': { label: 'Concluído', color: 'bg-green-200 text-green-800', iconColor: 'text-green-500' },
-  'Bloqueado': { label: 'Bloqueado', color: 'bg-red-200 text-red-800', iconColor: 'text-red-500' },
+  'A Fazer': { label: 'A Fazer', color: 'bg-gray-200 text-gray-800', borderColor: 'border-gray-400' },
+  'Em Progresso': { label: 'Em Progresso', color: 'bg-indigo-200 text-indigo-800', borderColor: 'border-indigo-400' },
+  'Concluído': { label: 'Concluído', color: 'bg-green-200 text-green-800', borderColor: 'border-green-500' },
+  'Bloqueado': { label: 'Bloqueado', color: 'bg-red-200 text-red-800', borderColor: 'border-red-500' },
 };
 const TASK_COLORS = ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#c084fc', '#f472b6', '#a3a3a3'];
 const CYCLE_COLORS = ['#fecaca', '#fed7aa', '#bbf7d0', '#bfdbfe', '#e9d5ff', '#fbcfe8'];
@@ -1136,7 +1136,7 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
     );
 };
 
-// --- Componente OkrForm CORRIGIDO ---
+// --- Componentes de OKR ---
 const OkrForm = ({ okr, onSave, onCancel }) => {
     const [objective, setObjective] = useState(okr?.objective || '');
     const [keyResults, setKeyResults] = useState(okr?.keyResults || []);
@@ -1887,13 +1887,24 @@ export default function App() {
                     </div>
                      <div className="mt-4">
                         <div className="inline-flex items-center bg-gray-200 rounded-lg p-1 space-x-1">
-                            <Button onClick={() => setView('workspace')} variant={view === 'workspace' ? 'primary' : 'secondary'} className="!shadow-none"><Layers size={16} /> Workspace</Button>
+                            {/* BOTÃO DA NOVA ABA DE ATIVIDADES */}
+                            <Button onClick={() => setView('tasks')} variant={view === 'tasks' ? 'primary' : 'secondary'} className="!shadow-none"><ListTodo size={16} /> Atividades</Button>
+                            <Button onClick={() => setView('workspace')} variant={view === 'workspace' ? 'primary' : 'secondary'} className="!shadow-none"><Layers size={16} /> Roadmap</Button>
                             <Button onClick={() => setView('okr')} variant={view === 'okr' ? 'primary' : 'secondary'} className="!shadow-none"><Target size={16} /> OKRs</Button>
                             <Button onClick={() => setView('executive')} variant={view === 'executive' ? 'primary' : 'secondary'} className="!shadow-none"><Briefcase size={16} /> Painel Executivo</Button>
                         </div>
                     </div>
                 </header>
                 <main>
+                    {/* RENDERIZAÇÃO CONDICIONAL DA NOVA ABA */}
+                    {view === 'tasks' && (
+                        <TasksView
+                            tasks={filteredTasks}
+                            onTaskClick={handleOpenTaskModal}
+                            filters={filters}
+                            setFilters={setFilters}
+                        />
+                    )}
                     {view === 'workspace' && (
                         <WorkspaceView
                             tasks={filteredTasks}
@@ -1912,7 +1923,7 @@ export default function App() {
                     {view === 'okr' && (
                         <OkrView 
                             okrs={okrs}
-                            tasks={tasks}
+                            tasks={tasks} // Passa todas as tarefas, não apenas as filtradas
                             onSave={handleSaveOkr}
                             onDelete={requestDelete}
                         />
