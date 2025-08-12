@@ -31,9 +31,9 @@ const db = getFirestore(app);
 
 // --- Constantes e Helpers ---
 const PRIORITIES = {
-  'Alta': { label: 'Alta', color: 'bg-red-500', textColor: 'text-red-500' },
-  'Média': { label: 'Média', color: 'bg-yellow-500', textColor: 'text-yellow-500' },
-  'Baixa': { label: 'Baixa', color: 'bg-blue-500', textColor: 'text-blue-500' },
+  'Alta': { label: 'Alta', color: 'bg-red-500', textColor: 'text-red-500', borderColor: 'border-red-500' },
+  'Média': { label: 'Média', color: 'bg-yellow-500', textColor: 'text-yellow-500', borderColor: 'border-yellow-500' },
+  'Baixa': { label: 'Baixa', color: 'bg-blue-500', textColor: 'text-blue-500', borderColor: 'border-blue-500' },
 };
 const STATUSES = {
   'A Fazer': { label: 'A Fazer', color: 'bg-gray-200 text-gray-800', borderColor: 'border-gray-400' },
@@ -590,9 +590,7 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
 };
 
 
-// ==================================================================
 // --- COMPONENTE TIMELINE ---
-// ==================================================================
 const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -717,7 +715,6 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
         <div className="relative bg-white border border-gray-200 rounded-lg shadow-sm">
             <div className="overflow-x-auto cursor-grab" ref={timelineRef} onMouseDown={onMouseDown} onMouseLeave={onMouseLeaveOrUp} onMouseUp={onMouseLeaveOrUp} onMouseMove={onMouseMove}>
                 <div style={{ width: timelineWidth }} className="relative">
-                    {/* 1. CABEÇALHO PRINCIPAL (STICKY) */}
                     <div className="sticky top-0 z-30 bg-gray-100/80 backdrop-blur-sm h-16">
                         <div className="flex border-b border-gray-300 h-8">
                              {headerGroups.map((group) => (<div key={group.key} className="flex-shrink-0 text-center font-bold text-gray-700 border-r border-gray-300 flex items-center justify-center" style={{ width: group.width }}><span className="whitespace-nowrap px-2">{group.label}</span></div>))}
@@ -727,9 +724,7 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                         </div>
                     </div>
 
-                    {/* --- ÁREA DE CONTEÚDO DA TIMELINE --- */}
                     <div className="relative">
-                        {/* 2. CAMADA DE FUNDO (GRID E CORES DOS CICLOS) */}
                         <div className="absolute top-0 left-0 w-full h-full z-0">
                             <div className="flex h-full">{days.map((day, index) => (<div key={index} className={`h-full border-r ${day.getUTCDay() === 0 || day.getUTCDay() === 6 ? 'bg-gray-50/50' : 'border-gray-100'}`} style={{ width: dayWidth }}></div>))}</div>
                             {cycles.map(cycle => {
@@ -746,7 +741,6 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                             })}
                         </div>
                         
-                        {/* 3. CAMADA DE NOMES DOS CICLOS (COM ESPAÇO DEDICADO) */}
                         <div className="relative z-10 h-8 border-b border-gray-200">
                              {cycles.map(cycle => {
                                  const cycleStart = parseLocalDate(cycle.startDate);
@@ -764,7 +758,6 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                              })}
                         </div>
 
-                        {/* 4. CAMADA DE TAREFAS */}
                         <div className="relative z-20">
                             {Object.keys(groupedTasks).sort().map((group) => {
                                 const isCollapsed = collapsedGroups[group];
@@ -1253,6 +1246,10 @@ const KrAttentionModal = ({ isOpen, onClose, kr, onSaveAttentionLog }) => {
     const [log, setLog] = useState(kr.attentionLog || []);
     const [newJustification, setNewJustification] = useState('');
 
+    useEffect(() => {
+        if(isOpen) setLog(kr.attentionLog || []);
+    }, [isOpen, kr.attentionLog]);
+
     const handleAdd = () => {
         if (!newJustification.trim()) return;
         const newLogEntry = {
@@ -1382,7 +1379,6 @@ const KrItem = ({ kr, okrStartDate, okrTargetDate, onUpdate, onDeleteUpdate, onS
     );
 };
 
-// --- Componente OkrView com NOVAS FUNCIONALIDADES ---
 const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
     const [layout, setLayout] = useState('list');
     const [isFormOpen, setIsFormOpen] = useState(false);
@@ -1570,8 +1566,8 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
                                                                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs text-gray-500 gap-2">
                                                                     <div className="flex items-center gap-4">
                                                                         <span className="flex items-center gap-1.5" title="Prioridade">
-                                                                            <ChevronsUpDown size={14} />
-                                                                            <strong>{task.priority}</strong>
+                                                                            <ChevronsUpDown size={14} className={PRIORITIES[task.priority]?.textColor} />
+                                                                            <strong className={PRIORITIES[task.priority]?.textColor}>{task.priority}</strong>
                                                                         </span>
                                                                         {task.projectTag && (
                                                                             <span className="flex items-center gap-1.5" title="Projeto">
@@ -1601,7 +1597,6 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
         </>
     );
 };
-
 
 // --- Componente de Login ---
 const LoginScreen = () => {
@@ -1695,6 +1690,125 @@ const LoginScreen = () => {
     );
 };
 
+
+// --- INÍCIO DOS NOVOS COMPONENTES ---
+
+// Componente para um único card de tarefa no quadro Kanban
+const TaskCard = ({ task, onTaskClick }) => {
+    const subtaskProgress = useMemo(() => {
+        if (!task.subtasks || task.subtasks.length === 0) return null;
+        const completed = task.subtasks.filter(s => s.completed).length;
+        return { completed, total: task.subtasks.length };
+    }, [task.subtasks]);
+
+    const isBlocked = useMemo(() => task.blockerLog?.some(b => !b.unblockDate), [task.blockerLog]);
+
+    return (
+        <div
+            onClick={() => onTaskClick(task)}
+            className={`bg-white rounded-lg p-4 shadow-md border-l-4 ${isBlocked ? 'border-red-500' : (PRIORITIES[task.priority]?.borderColor || 'border-transparent')} cursor-pointer hover:shadow-lg hover:bg-gray-50 transition-all duration-200 space-y-3`}
+        >
+            {/* Cabeçalho do Card */}
+            <div className="flex justify-between items-start">
+                <span className="text-xs font-semibold bg-gray-100 text-gray-700 px-2 py-1 rounded">{task.projectTag || 'Geral'}</span>
+                <div className="flex items-center gap-2">
+                    {isBlocked && <Lock size={14} className="text-red-500" title="Tarefa Bloqueada"/>}
+                    <span className={`text-xs font-bold px-2 py-1 rounded-full ${PRIORITIES[task.priority]?.color} text-white`}>{task.priority}</span>
+                </div>
+            </div>
+
+            {/* Título da Tarefa */}
+            <div>
+                <p className="font-semibold text-gray-800">{task.title}</p>
+                <p className="text-xs text-gray-400 font-mono mt-1">ID: {task.humanId}</p>
+            </div>
+
+            {/* Rodapé do Card */}
+            <div className="flex justify-between items-center text-xs text-gray-500 pt-2 border-t border-gray-100">
+                <div className="flex items-center gap-1.5" title="Prazo Final">
+                    <Calendar size={14} />
+                    <span>{formatDate(task.endDate)}</span>
+                </div>
+                {subtaskProgress && (
+                    <div className="flex items-center gap-1.5" title="Subtarefas Concluídas">
+                        <CheckCircle size={14} />
+                        <span>{subtaskProgress.completed}/{subtaskProgress.total}</span>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+// --- NOVA ABA DE ATIVIDADES (KANBAN) ---
+const TasksView = ({ tasks, onTaskClick, filters, setFilters }) => {
+    const tasksByStatus = useMemo(() => {
+        const grouped = {};
+        Object.keys(STATUSES).forEach(status => {
+            grouped[status] = [];
+        });
+        tasks.forEach(task => {
+            if (grouped[task.status]) {
+                grouped[task.status].push(task);
+            }
+        });
+        return grouped;
+    }, [tasks]);
+
+    const allLabels = useMemo(() => {
+        const labelSet = new Set();
+        tasks.forEach(task => (task.labels || []).forEach(label => labelSet.add(label)));
+        const labelOptions = {};
+        Array.from(labelSet).sort().forEach(label => {
+            labelOptions[label] = { label };
+        });
+        return labelOptions;
+    }, [tasks]);
+
+    return (
+        <div className="space-y-6">
+            <Card>
+                <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div>
+                        <h2 className="text-3xl font-bold text-gray-800 flex items-center"><ListTodo className="mr-3 text-indigo-600" />Quadro de Atividades</h2>
+                        <p className="text-gray-600 mt-1">Visualize e gerencie o fluxo de trabalho do dia a dia.</p>
+                    </div>
+                    <Button onClick={() => onTaskClick(null)} variant="primary"><Plus size={16} /> Nova Tarefa</Button>
+                </div>
+                <div className="flex flex-wrap justify-start items-center gap-4 border-t pt-4 mt-4">
+                    <FilterList title="Prioridade" options={PRIORITIES} active={filters.priority} onFilterChange={val => setFilters({...filters, priority: val})}/>
+                    <FilterList title="Status" options={STATUSES} active={filters.status} onFilterChange={val => setFilters({...filters, status: val})}/>
+                    {Object.keys(allLabels).length > 0 && (
+                         <FilterList title="Etiqueta" options={allLabels} active={filters.label} onFilterChange={val => setFilters({...filters, label: val})}/>
+                    )}
+                </div>
+            </Card>
+
+            <div className="flex gap-6 overflow-x-auto pb-4">
+                {Object.keys(STATUSES).map(status => (
+                    <div key={status} className="flex-shrink-0 w-80 bg-gray-100 rounded-xl">
+                        <div className={`p-4 sticky top-0 bg-gray-100 rounded-t-xl z-10 border-t-4 ${STATUSES[status].borderColor}`}>
+                            <div className="flex justify-between items-center">
+                                <h3 className="font-bold text-gray-800">{STATUSES[status].label}</h3>
+                                <span className="text-sm font-bold bg-gray-200 text-gray-600 px-2 py-1 rounded-full">
+                                    {tasksByStatus[status].length}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="p-4 space-y-4 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
+                            {tasksByStatus[status].map(task => (
+                                <TaskCard key={task.id} task={task} onTaskClick={onTaskClick} />
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+// --- FIM DOS NOVOS COMPONENTES ---
+
 // --- Componente Principal ---
 export default function App() {
     const [user, setUser] = useState(null);
@@ -1704,7 +1818,7 @@ export default function App() {
     const [okrs, setOkrs] = useState([]);
     const [cycles, setCycles] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [view, setView] = useState('okr');
+    const [view, setView] = useState('tasks'); // Mudei a visão padrão para a nova aba
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
     const [isCyclesModalOpen, setIsCyclesModalOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState(null);
@@ -1887,7 +2001,6 @@ export default function App() {
                     </div>
                      <div className="mt-4">
                         <div className="inline-flex items-center bg-gray-200 rounded-lg p-1 space-x-1">
-                            {/* BOTÃO DA NOVA ABA DE ATIVIDADES */}
                             <Button onClick={() => setView('tasks')} variant={view === 'tasks' ? 'primary' : 'secondary'} className="!shadow-none"><ListTodo size={16} /> Atividades</Button>
                             <Button onClick={() => setView('workspace')} variant={view === 'workspace' ? 'primary' : 'secondary'} className="!shadow-none"><Layers size={16} /> Roadmap</Button>
                             <Button onClick={() => setView('okr')} variant={view === 'okr' ? 'primary' : 'secondary'} className="!shadow-none"><Target size={16} /> OKRs</Button>
@@ -1896,7 +2009,6 @@ export default function App() {
                     </div>
                 </header>
                 <main>
-                    {/* RENDERIZAÇÃO CONDICIONAL DA NOVA ABA */}
                     {view === 'tasks' && (
                         <TasksView
                             tasks={filteredTasks}
@@ -1923,7 +2035,7 @@ export default function App() {
                     {view === 'okr' && (
                         <OkrView 
                             okrs={okrs}
-                            tasks={tasks} // Passa todas as tarefas, não apenas as filtradas
+                            tasks={tasks}
                             onSave={handleSaveOkr}
                             onDelete={requestDelete}
                         />
