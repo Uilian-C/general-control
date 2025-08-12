@@ -51,7 +51,7 @@ const formatDate = (dateInput, includeTime = false) => {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
-    timeZone: 'UTC' // Manter UTC para consistência na exibição
+    timeZone: 'UTC'
   };
   if (includeTime) {
     options.hour = '2-digit';
@@ -1368,15 +1368,12 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
     const [expandedOkrs, setExpandedOkrs] = useState({});
     const [itemToDelete, setItemToDelete] = useState(null);
     const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
-    
-    // NOVO ESTADO: para controlar a expansão da lista de tarefas de cada OKR
     const [expandedTasks, setExpandedTasks] = useState({});
 
     const toggleExpansion = (okrId) => {
         setExpandedOkrs(prev => ({ ...prev, [okrId]: !prev[okrId] }));
     };
 
-    // NOVA FUNÇÃO: para expandir/recolher a lista de tarefas
     const toggleTasksExpansion = (okrId) => {
         setExpandedTasks(prev => ({ ...prev, [okrId]: !prev[okrId] }));
     };
@@ -1409,8 +1406,21 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
         onSave({ ...okr, keyResults: updatedKeyResults });
     };
     
+    // FUNÇÃO CORRIGIDA
     const handleDeleteUpdate = (okr, krId, updateId) => {
-        // Lógica de deleção de update (se necessário)
+        const updatedKeyResults = okr.keyResults.map(kr => {
+            if (kr.id === krId) {
+                const remainingUpdates = (kr.updates || []).filter(u => u.date !== updateId);
+                let newCurrentValue = kr.startValue; 
+                if (remainingUpdates.length > 0) {
+                    remainingUpdates.sort((a, b) => new Date(b.date) - new Date(a.date));
+                    newCurrentValue = remainingUpdates[0].value;
+                }
+                return { ...kr, updates: remainingUpdates, currentValue: newCurrentValue };
+            }
+            return kr;
+        });
+        onSave({ ...okr, keyResults: updatedKeyResults });
     };
 
     const handleEdit = (okr) => {
@@ -1529,14 +1539,31 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
                                                 <div className={`transition-all duration-500 ease-in-out overflow-hidden ${areTasksExpanded ? 'max-h-[500px] mt-3' : 'max-h-0'}`}>
                                                     <ul className="space-y-2">
                                                         {relatedTasks.map(task => (
-                                                            <li key={task.id} className="text-sm text-gray-800 flex items-center justify-between p-2 bg-white rounded-md border">
-                                                                <div className="flex items-center">
-                                                                    <ArrowRight size={14} className="mr-2 text-gray-400" />
-                                                                    <span>{task.title}</span>
+                                                            <li key={task.id} className="text-sm p-3 bg-white rounded-md border space-y-2">
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="font-semibold text-gray-800">{task.title}</span>
+                                                                    <span className={`text-xs px-2 py-0.5 rounded-full ${STATUSES[task.status]?.color || 'bg-gray-200 text-gray-800'}`}>
+                                                                        {task.status}
+                                                                    </span>
                                                                 </div>
-                                                                <span className={`text-xs px-2 py-0.5 rounded-full ${STATUSES[task.status]?.color || 'bg-gray-200 text-gray-800'}`}>
-                                                                    {task.status}
-                                                                </span>
+                                                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs text-gray-500 gap-2">
+                                                                    <div className="flex items-center gap-4">
+                                                                        <span className="flex items-center gap-1.5" title="Prioridade">
+                                                                            <ChevronsUpDown size={14} />
+                                                                            <strong>{task.priority}</strong>
+                                                                        </span>
+                                                                        {task.projectTag && (
+                                                                            <span className="flex items-center gap-1.5" title="Projeto">
+                                                                                <Briefcase size={14} />
+                                                                                <span>{task.projectTag}</span>
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="flex items-center gap-1.5" title="Duração">
+                                                                        <Calendar size={14} />
+                                                                        <span>{formatDate(task.startDate)} → {formatDate(task.endDate)}</span>
+                                                                    </div>
+                                                                </div>
                                                             </li>
                                                         ))}
                                                     </ul>
@@ -1553,6 +1580,7 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
         </>
     );
 };
+
 
 // --- Componente de Login ---
 const LoginScreen = () => {
