@@ -591,7 +591,7 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
 
 
 // ==================================================================
-// --- COMPONENTE TIMELINE CORRIGIDO ---
+// --- COMPONENTE TIMELINE ---
 // ==================================================================
 const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
     const today = new Date();
@@ -1136,7 +1136,7 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
     );
 };
 
-// --- Componentes de OKR ---
+// --- Componente OkrForm CORRIGIDO ---
 const OkrForm = ({ okr, onSave, onCancel }) => {
     const [objective, setObjective] = useState(okr?.objective || '');
     const [keyResults, setKeyResults] = useState(okr?.keyResults || []);
@@ -1145,7 +1145,19 @@ const OkrForm = ({ okr, onSave, onCancel }) => {
     const handleKrChange = (index, field, value) => {
         const newKrs = [...keyResults];
         const numericFields = ['startValue', 'targetValue', 'weight'];
-        newKrs[index][field] = numericFields.includes(field) ? parseFloat(value) || 0 : value;
+        
+        if (numericFields.includes(field)) {
+            if (value === '') {
+                newKrs[index][field] = '';
+            } else {
+                const parsedValue = parseFloat(value);
+                if (!isNaN(parsedValue)) {
+                    newKrs[index][field] = parsedValue;
+                }
+            }
+        } else {
+            newKrs[index][field] = value;
+        }
         setKeyResults(newKrs);
     };
 
@@ -1154,7 +1166,17 @@ const OkrForm = ({ okr, onSave, onCancel }) => {
     
     const handleFormSave = () => {
         if (!objective.trim()) return;
-        const finalKrs = keyResults.filter(kr => kr.text.trim() !== '');
+
+        const finalKrs = keyResults
+            .filter(kr => kr.text.trim() !== '')
+            .map(kr => ({
+                ...kr,
+                weight: Number(kr.weight) > 0 ? Number(kr.weight) : 1,
+                startValue: Number(kr.startValue) || 0,
+                targetValue: Number(kr.targetValue) || 0,
+                currentValue: Number(kr.currentValue) || 0,
+            }));
+
         onSave({ id: okr?.id, objective, keyResults: finalKrs, targetDate, startDate: okr?.startDate || new Date().toISOString().split('T')[0] });
     };
 
@@ -1182,10 +1204,10 @@ const OkrForm = ({ okr, onSave, onCancel }) => {
                                     <button onClick={() => removeKr(index)} className="text-red-500 hover:text-red-700 p-1"><Trash2 size={16} /></button>
                                 </div>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                    <div><label className="text-xs text-gray-500">Inicial</label><input type="number" value={kr.startValue || ''} onChange={e => handleKrChange(index, 'startValue', e.target.value)} className="w-full p-2 border border-gray-300 rounded-md text-gray-800" /></div>
-                                    <div><label className="text-xs text-gray-500">Meta</label><input type="number" value={kr.targetValue || ''} onChange={e => handleKrChange(index, 'targetValue', e.target.value)} className="w-full p-2 border border-gray-300 rounded-md text-gray-800" /></div>
+                                    <div><label className="text-xs text-gray-500">Inicial</label><input type="number" value={kr.startValue ?? ''} onChange={e => handleKrChange(index, 'startValue', e.target.value)} className="w-full p-2 border border-gray-300 rounded-md text-gray-800" /></div>
+                                    <div><label className="text-xs text-gray-500">Meta</label><input type="number" value={kr.targetValue ?? ''} onChange={e => handleKrChange(index, 'targetValue', e.target.value)} className="w-full p-2 border border-gray-300 rounded-md text-gray-800" /></div>
                                     <div><label className="text-xs text-gray-500">Atual</label><p className="w-full p-2 border border-gray-200 bg-gray-100 rounded-md text-gray-800">{kr.currentValue || 0}</p></div>
-                                    <div><label className="text-xs text-gray-500">Peso</label><input type="number" value={kr.weight || 1} onChange={e => handleKrChange(index, 'weight', e.target.value)} className="w-full p-2 border border-gray-300 rounded-md text-gray-800" /></div>
+                                    <div><label className="text-xs text-gray-500">Peso</label><input type="number" value={kr.weight ?? ''} onChange={e => handleKrChange(index, 'weight', e.target.value)} className="w-full p-2 border border-gray-300 rounded-md text-gray-800" /></div>
                                 </div>
                             </div>
                         ))}
@@ -1360,7 +1382,7 @@ const KrItem = ({ kr, okrStartDate, okrTargetDate, onUpdate, onDeleteUpdate, onS
     );
 };
 
-// --- Componente OkrView MODIFICADO ---
+// --- Componente OkrView com NOVAS FUNCIONALIDADES ---
 const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
     const [layout, setLayout] = useState('list');
     const [isFormOpen, setIsFormOpen] = useState(false);
@@ -1406,7 +1428,6 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
         onSave({ ...okr, keyResults: updatedKeyResults });
     };
     
-    // FUNÇÃO CORRIGIDA
     const handleDeleteUpdate = (okr, krId, updateId) => {
         const updatedKeyResults = okr.keyResults.map(kr => {
             if (kr.id === krId) {
@@ -1539,7 +1560,7 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
                                                 <div className={`transition-all duration-500 ease-in-out overflow-hidden ${areTasksExpanded ? 'max-h-[500px] mt-3' : 'max-h-0'}`}>
                                                     <ul className="space-y-2">
                                                         {relatedTasks.map(task => (
-                                                            <li key={task.id} className="text-sm p-3 bg-white rounded-md border space-y-2">
+                                                             <li key={task.id} className="text-sm p-3 bg-white rounded-md border space-y-2">
                                                                 <div className="flex justify-between items-center">
                                                                     <span className="font-semibold text-gray-800">{task.title}</span>
                                                                     <span className={`text-xs px-2 py-0.5 rounded-full ${STATUSES[task.status]?.color || 'bg-gray-200 text-gray-800'}`}>
