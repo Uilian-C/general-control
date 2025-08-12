@@ -60,10 +60,8 @@ const formatDate = (dateInput, includeTime = false) => {
   return new Intl.DateTimeFormat('pt-BR', options).format(date);
 };
 
-// Função para criar datas no fuso horário local, evitando problemas com UTC
 const parseLocalDate = (dateString) => {
     if (!dateString) return null;
-    // Adicionar T00:00:00 força o JS a interpretar a data no fuso horário local
     return new Date(dateString + 'T00:00:00');
 }
 
@@ -605,7 +603,7 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
     
     const dayWidth = useMemo(() => 8 + (zoomLevel * 2.5), [zoomLevel]);
     
-    const { days, timelineWidth, headerGroups, subHeaderGroups, todayPosition } = useMemo(() => {
+    const { days, timelineWidth, headerGroups, subHeaderGroups } = useMemo(() => {
         let maxEndDate = null;
         const allDates = [...tasks, ...cycles].map(item => parseLocalDate(item.endDate));
         if (allDates.length > 0) {
@@ -678,11 +676,7 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
             }
         }
         
-        // --- AJUSTE 1: Cálculo da posição do dia atual ---
-        const daysSinceStart = Math.round((today.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24));
-        const todayPos = daysSinceStart * dayWidth;
-        
-        return { days, timelineWidth, headerGroups: primaryGroups, subHeaderGroups: secondaryGroups, todayPosition: todayPos };
+        return { days, timelineWidth, headerGroups: primaryGroups, subHeaderGroups: secondaryGroups };
     }, [viewStartDate, zoomLevel, tasks, cycles]);
 
     const onMouseDown = (e) => {
@@ -723,6 +717,7 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
         <div className="relative bg-white border border-gray-200 rounded-lg shadow-sm">
             <div className="overflow-x-auto cursor-grab" ref={timelineRef} onMouseDown={onMouseDown} onMouseLeave={onMouseLeaveOrUp} onMouseUp={onMouseLeaveOrUp} onMouseMove={onMouseMove}>
                 <div style={{ width: timelineWidth }} className="relative">
+                    {/* 1. CABEÇALHO PRINCIPAL (STICKY) */}
                     <div className="sticky top-0 z-30 bg-gray-100/80 backdrop-blur-sm h-16">
                         <div className="flex border-b border-gray-300 h-8">
                              {headerGroups.map((group) => (<div key={group.key} className="flex-shrink-0 text-center font-bold text-gray-700 border-r border-gray-300 flex items-center justify-center" style={{ width: group.width }}><span className="whitespace-nowrap px-2">{group.label}</span></div>))}
@@ -731,113 +726,107 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                              {subHeaderGroups.map((group) => (<div key={group.key} className={`flex-shrink-0 text-center font-semibold border-r border-gray-200 flex flex-col justify-center items-center ${group.isToday ? 'bg-indigo-100' : ''}`} style={{ width: group.width }}><span className={`text-xs ${group.isToday ? 'text-indigo-600' : 'text-gray-500'}`}>{group.subLabel}</span><span className={`whitespace-nowrap text-sm ${group.isToday ? 'text-indigo-600 font-bold' : 'text-gray-600'}`}>{group.label}</span></div>))}
                         </div>
                     </div>
-                    
-                    <div className="absolute top-0 left-0 w-full h-full z-0">
-                        <div className="flex h-full">{days.map((day, index) => (<div key={index} className={`h-full border-r ${day.getUTCDay() === 0 || day.getUTCDay() === 6 ? 'bg-gray-50/50' : 'border-gray-100'}`} style={{ width: dayWidth }}></div>))}</div>
-                         {cycles.map(cycle => {
-                             const cycleStart = parseLocalDate(cycle.startDate);
-                             const cycleEnd = parseLocalDate(cycle.endDate);
-                             if (!cycleStart || !cycleEnd || cycleEnd < viewStartDate || cycleStart > new Date(viewStartDate).setDate(viewStartDate.getDate() + days.length)) return null;
-                             const startOffset = (cycleStart.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24);
-                             const duration = Math.max(1, (cycleEnd.getTime() - cycleStart.getTime()) / (1000 * 60 * 60 * 24) + 1);
-                             return (
-                                 <div key={cycle.id} className="absolute top-16 bottom-0" style={{ left: `${startOffset * dayWidth}px`, width: `${duration * dayWidth}px` }}>
-                                     <div className="h-full w-full border-x" style={{ backgroundColor: cycle.color, opacity: 0.15, borderColor: cycle.color }}></div>
-                                 </div>
-                             )
-                         })}
-                    </div>
 
-                    {/* --- AJUSTE 2: Camada de Nomes dos Ciclos --- */}
-                    <div className="absolute top-16 left-0 w-full h-8 z-25 pointer-events-none">
-                         {cycles.map(cycle => {
-                             const cycleStart = parseLocalDate(cycle.startDate);
-                             const cycleEnd = parseLocalDate(cycle.endDate);
-                             if (!cycleStart || !cycleEnd || cycleEnd < viewStartDate || cycleStart > new Date(viewStartDate).setDate(viewStartDate.getDate() + days.length)) return null;
-                             const startOffset = (cycleStart.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24);
-                             const duration = Math.max(1, (cycleEnd.getTime() - cycleStart.getTime()) / (1000 * 60 * 60 * 24) + 1);
-                             return (
-                                 <div key={cycle.id} className="absolute top-0 flex items-center h-full" style={{ left: `${startOffset * dayWidth}px`, width: `${duration * dayWidth}px` }}>
-                                     <div 
-                                         className="w-full font-bold text-center text-sm p-1 truncate" 
-                                         style={{ 
-                                             color: '#1f2937',
-                                             textShadow: '0 0 4px white, 0 0 2px white'
-                                         }}
-                                     >
-                                         {cycle.name}
-                                     </div>
-                                 </div>
-                             )
-                         })}
-                    </div>
-
-                    <div className="relative z-20 pt-2">
-                        {Object.keys(groupedTasks).sort().map((group) => {
-                            const isCollapsed = collapsedGroups[group];
-                            return (
-                                <div key={group}>
-                                    <div className="sticky top-[64px] z-20 flex items-center h-10 bg-white/80 backdrop-blur-sm border-b border-t border-gray-200 -ml-px" onClick={() => toggleGroup(group)}>
-                                        <div className="flex items-center gap-2 p-2 cursor-pointer"><ChevronsUpDown size={16} className={`transition-transform ${isCollapsed ? '-rotate-90' : ''}`} /><h3 className="font-bold text-gray-800">{group}</h3></div>
+                    {/* --- ÁREA DE CONTEÚDO DA TIMELINE --- */}
+                    <div className="relative">
+                        {/* 2. CAMADA DE FUNDO (GRID E CORES DOS CICLOS) */}
+                        <div className="absolute top-0 left-0 w-full h-full z-0">
+                            {/* Linhas da grade vertical */}
+                            <div className="flex h-full">{days.map((day, index) => (<div key={index} className={`h-full border-r ${day.getUTCDay() === 0 || day.getUTCDay() === 6 ? 'bg-gray-50/50' : 'border-gray-100'}`} style={{ width: dayWidth }}></div>))}</div>
+                            {/* Fundos coloridos dos ciclos */}
+                            {cycles.map(cycle => {
+                                const cycleStart = parseLocalDate(cycle.startDate);
+                                const cycleEnd = parseLocalDate(cycle.endDate);
+                                if (!cycleStart || !cycleEnd || cycleEnd < viewStartDate || cycleStart > new Date(viewStartDate).setDate(viewStartDate.getDate() + days.length)) return null;
+                                const startOffset = Math.round((cycleStart.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24));
+                                const duration = Math.max(1, ((cycleEnd.getTime() - cycleStart.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+                                return (
+                                    <div key={cycle.id} className="absolute top-0 bottom-0" style={{ left: `${startOffset * dayWidth}px`, width: `${duration * dayWidth}px` }}>
+                                        <div className="h-full w-full border-x" style={{ backgroundColor: cycle.color, opacity: 0.15, borderColor: cycle.color }}></div>
                                     </div>
-                                    {!isCollapsed && (
-                                        <div className="relative" style={{ height: groupedTasks[group].length * 48 + 10 }}>
-                                            {groupedTasks[group].map((task, taskIndex) => {
-                                                const taskStart = parseLocalDate(task.startDate);
-                                                const taskEnd = parseLocalDate(task.endDate);
-                                                if (!taskStart || !taskEnd || taskEnd < viewStartDate || taskStart > new Date(viewStartDate).setDate(viewStartDate.getDate() + days.length)) return null;
-                                                const startOffset = (taskStart.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24);
-                                                const duration = Math.max(1, (taskEnd.getTime() - taskStart.getTime()) / (1000 * 60 * 60 * 24) + 1);
-                                                const left = startOffset * dayWidth;
-                                                const width = duration * dayWidth - 4;
-                                                const progress = calculateTaskProgress(task);
-                                                const daysRemaining = Math.ceil((taskEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                                                return (
-                                                    <div key={task.id} id={`task-${task.id}`} className="h-10 absolute flex items-center rounded-lg cursor-pointer transition-all duration-200 group task-bar" style={{ top: `${taskIndex * 48 + 5}px`, left: `${left}px`, width: `${width}px` }} onClick={() => onTaskClick(task)} title={`${task.title} - ${task.status} (${Math.round(progress)}%)`}>
-                                                        <div 
-                                                            className={`h-full w-full rounded-lg flex items-center overflow-hidden relative shadow-md group-hover:shadow-lg group-hover:scale-[1.02] transition-all duration-200`}
-                                                            style={{ 
-                                                                backgroundColor: task.blockerLog?.some(b => !b.unblockDate) 
-                                                                    ? '#f87171'
-                                                                    : task.customColor || '#9ca3af'
-                                                            }}
-                                                        >
-                                                            <div className="absolute top-0 left-0 h-full bg-black/20" style={{ width: `${progress}%` }}></div>
-                                                            <div className="relative z-10 flex items-center justify-between w-full px-2">
-                                                                <div className="flex items-center gap-2">
-                                                                    {task.blockerLog?.some(b => !b.unblockDate) && <Lock size={12} className="text-white flex-shrink-0" />}
-                                                                    <p className="text-sm font-semibold text-white truncate">{task.title}</p>
-                                                                </div>
-                                                                <div className="flex items-center gap-2 flex-shrink-0">
-                                                                    {width > 120 && <span className={`text-xs px-1.5 py-0.5 rounded-full ${STATUSES[task.status]?.color} bg-opacity-70 backdrop-blur-sm`}>{STATUSES[task.status]?.label}</span>}
-                                                                    {width > 80 && <span className="text-xs text-white font-semibold bg-black/20 px-1.5 py-0.5 rounded-full">{progress}%</span>}
-                                                                    {daysRemaining > 0 && task.status !== 'Concluído' && width > 100 && (
-                                                                        <span className="text-xs text-white bg-black/20 px-1.5 py-0.5 rounded-full">{daysRemaining}d</span>
-                                                                    )}
+                                )
+                            })}
+                        </div>
+                        
+                        {/* 3. CAMADA DE NOMES DOS CICLOS (COM ESPAÇO DEDICADO) */}
+                        <div className="relative z-10 h-8 border-b border-gray-200">
+                             {cycles.map(cycle => {
+                                 const cycleStart = parseLocalDate(cycle.startDate);
+                                 const cycleEnd = parseLocalDate(cycle.endDate);
+                                 if (!cycleStart || !cycleEnd || cycleEnd < viewStartDate || cycleStart > new Date(viewStartDate).setDate(viewStartDate.getDate() + days.length)) return null;
+                                 const startOffset = Math.round((cycleStart.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24));
+                                 const duration = Math.max(1, ((cycleEnd.getTime() - cycleStart.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+                                 return (
+                                     <div key={cycle.id} className="absolute top-0 flex items-center h-full" style={{ left: `${startOffset * dayWidth}px`, width: `${duration * dayWidth}px` }}>
+                                         <div className="w-full font-bold text-center text-sm text-gray-700 p-1 truncate">
+                                             {cycle.name}
+                                         </div>
+                                     </div>
+                                 )
+                             })}
+                        </div>
+
+                        {/* 4. CAMADA DE TAREFAS */}
+                        <div className="relative z-20">
+                            {Object.keys(groupedTasks).sort().map((group) => {
+                                const isCollapsed = collapsedGroups[group];
+                                return (
+                                    <div key={group}>
+                                        {/* O 'top' foi ajustado para 96px (64px do header + 32px da linha de ciclos) */}
+                                        <div className="sticky top-[96px] z-20 flex items-center h-10 bg-white/80 backdrop-blur-sm border-b border-t border-gray-200 -ml-px" onClick={() => toggleGroup(group)}>
+                                            <div className="flex items-center gap-2 p-2 cursor-pointer"><ChevronsUpDown size={16} className={`transition-transform ${isCollapsed ? '-rotate-90' : ''}`} /><h3 className="font-bold text-gray-800">{group}</h3></div>
+                                        </div>
+                                        {!isCollapsed && (
+                                            <div className="relative" style={{ height: groupedTasks[group].length * 48 + 10 }}>
+                                                {groupedTasks[group].map((task, taskIndex) => {
+                                                    const taskStart = parseLocalDate(task.startDate);
+                                                    const taskEnd = parseLocalDate(task.endDate);
+                                                    if (!taskStart || !taskEnd || taskEnd < viewStartDate || taskStart > new Date(viewStartDate).setDate(viewStartDate.getDate() + days.length)) return null;
+                                                    
+                                                    const startOffset = (taskStart.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24); const duration = Math.max(1, (taskEnd.getTime() - taskStart.getTime()) / (1000 * 60 * 60 * 24) + 1); const left = startOffset * dayWidth; const width = duration * dayWidth - 4;
+                                                    const progress = calculateTaskProgress(task);
+                                                    const daysRemaining = Math.ceil((taskEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                                                    
+                                                    return (
+                                                        <div key={task.id} id={`task-${task.id}`} className="h-10 absolute flex items-center rounded-lg cursor-pointer transition-all duration-200 group task-bar" style={{ top: `${taskIndex * 48 + 5}px`, left: `${left}px`, width: `${width}px` }} onClick={() => onTaskClick(task)} title={`${task.title} - ${task.status} (${Math.round(progress)}%)`}>
+                                                            <div 
+                                                                className={`h-full w-full rounded-lg flex items-center overflow-hidden relative shadow-md group-hover:shadow-lg group-hover:scale-[1.02] transition-all duration-200`}
+                                                                style={{ 
+                                                                    backgroundColor: task.blockerLog?.some(b => !b.unblockDate) 
+                                                                        ? '#f87171'
+                                                                        : task.customColor || '#9ca3af'
+                                                                }}
+                                                            >
+                                                                <div className="absolute top-0 left-0 h-full bg-black/20" style={{ width: `${progress}%` }}></div>
+                                                                <div className="relative z-10 flex items-center justify-between w-full px-2">
+                                                                    <div className="flex items-center gap-2">
+                                                                        {task.blockerLog?.some(b => !b.unblockDate) && <Lock size={12} className="text-white flex-shrink-0" />}
+                                                                        <p className="text-sm font-semibold text-white truncate">{task.title}</p>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                                                        {width > 120 && <span className={`text-xs px-1.5 py-0.5 rounded-full ${STATUSES[task.status]?.color} bg-opacity-70 backdrop-blur-sm`}>{STATUSES[task.status]?.label}</span>}
+                                                                        {width > 80 && <span className="text-xs text-white font-semibold bg-black/20 px-1.5 py-0.5 rounded-full">{progress}%</span>}
+                                                                        {daysRemaining > 0 && task.status !== 'Concluído' && width > 100 && (
+                                                                            <span className="text-xs text-white bg-black/20 px-1.5 py-0.5 rounded-full">{daysRemaining}d</span>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-
-                    {todayPosition >= 0 && todayPosition <= timelineWidth && (
-                        <div className="absolute top-0 h-full w-0.5 bg-red-500 z-30 pointer-events-none" style={{ left: todayPosition }}>
-                            <div className="absolute -top-1 -translate-x-1/2 left-1/2 bg-red-500 rounded-full w-2 h-2"></div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
-                    )}
+                    </div>
                 </div>
             </div>
         </div>
     );
 };
-
 
 const FilterList = ({ title, options, active, onFilterChange }) => (
     <div className="flex items-center gap-2">
@@ -1527,7 +1516,7 @@ const OkrView = ({ okrs, onSave, onDelete }) => {
     );
 };
 
-// NOVO: Componente para a tela de Login com abas
+// --- Componente de Login ---
 const LoginScreen = () => {
     const [isLoginView, setIsLoginView] = useState(true);
     const [email, setEmail] = useState('');
@@ -1554,7 +1543,6 @@ const LoginScreen = () => {
         e.preventDefault();
         setError('');
         if (isLoginView) {
-            // Login com E-mail e Senha
             try {
                 await signInWithEmailAndPassword(auth, email, password);
             } catch (error) {
@@ -1562,7 +1550,6 @@ const LoginScreen = () => {
                 console.error("Erro de login:", error);
             }
         } else {
-            // Registro com E-mail e Senha
             try {
                 const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                 await updateProfile(userCredential.user, { displayName: name });
