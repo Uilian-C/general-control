@@ -310,7 +310,6 @@ const CyclesModal = ({ isOpen, onClose, cycles, onSave, onDelete }) => {
     );
 };
 
-
 const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest }) => {
     const getInitialFormState = () => {
         const today = new Date().toISOString().split('T')[0];
@@ -592,6 +591,10 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
     );
 };
 
+
+// ==================================================================
+// --- COMPONENTE TIMELINE CORRIGIDO ---
+// ==================================================================
 const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -632,19 +635,16 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
             let currentPrimaryGroup = null;
             let currentSecondaryGroup = null;
 
-            // Nível de Zoom: Trimestre / Mês
             if (zoomLevel <= 3) {
                 days.forEach(day => {
                     const year = day.getFullYear();
                     const quarter = Math.floor(day.getMonth() / 3) + 1;
                     const quarterKey = `${year}-Q${quarter}`;
-                    
                     if (!currentPrimaryGroup || currentPrimaryGroup.key !== quarterKey) {
                         currentPrimaryGroup = { key: quarterKey, label: `T${quarter} ${year}`, width: 0 };
                         primaryGroups.push(currentPrimaryGroup);
                     }
                     currentPrimaryGroup.width += dayWidth;
-                    
                     const monthKey = `${year}-${day.getMonth()}`;
                     if(!currentSecondaryGroup || currentSecondaryGroup.key !== monthKey) {
                         currentSecondaryGroup = { key: monthKey, label: new Intl.DateTimeFormat('pt-BR', { month: 'long', timeZone: 'UTC' }).format(day), width: 0 };
@@ -653,7 +653,6 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                     currentSecondaryGroup.width += dayWidth;
                 });
             } 
-            // Nível de Zoom: Mês / Dia
             else if (zoomLevel <= 7) {
                 days.forEach(day => {
                     const monthKey = `${day.getFullYear()}-${day.getMonth()}`;
@@ -662,11 +661,9 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                         primaryGroups.push(currentPrimaryGroup);
                     }
                     currentPrimaryGroup.width += dayWidth;
-                    
                     secondaryGroups.push({ key: day.toISOString(), label: day.getDate(), width: dayWidth, isToday: day.toDateString() === today.toDateString() });
                 });
             }
-            // Nível de Zoom: Dia / Dia da Semana
             else {
                  days.forEach(day => {
                     const weekNumber = Math.ceil((((day - new Date(day.getFullYear(), 0, 1)) / 86400000) + new Date(day.getFullYear(), 0, 1).getDay() + 1) / 7);
@@ -674,15 +671,16 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                      if (!currentPrimaryGroup || currentPrimaryGroup.key !== weekKey) {
                         currentPrimaryGroup = { key: weekKey, label: `Semana ${weekNumber}`, width: 0 };
                         primaryGroups.push(currentPrimaryGroup);
-                    }
-                    currentPrimaryGroup.width += dayWidth;
-
+                     }
+                     currentPrimaryGroup.width += dayWidth;
                     secondaryGroups.push({ key: day.toISOString(), label: day.getDate(), subLabel: new Intl.DateTimeFormat('pt-BR', { weekday: 'short', timeZone: 'UTC' }).format(day).slice(0, 3), width: dayWidth, isToday: day.toDateString() === today.toDateString() });
                 });
             }
         }
         
-        const todayPos = (today.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24) * dayWidth;
+        // --- AJUSTE 1: Cálculo da posição do dia atual ---
+        const daysSinceStart = Math.round((today.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24));
+        const todayPos = daysSinceStart * dayWidth;
         
         return { days, timelineWidth, headerGroups: primaryGroups, subHeaderGroups: secondaryGroups, todayPosition: todayPos };
     }, [viewStartDate, zoomLevel, tasks, cycles]);
@@ -734,7 +732,6 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                         </div>
                     </div>
                     
-                    {/* Camada de Fundo (Grid e Backgrounds dos Ciclos) */}
                     <div className="absolute top-0 left-0 w-full h-full z-0">
                         <div className="flex h-full">{days.map((day, index) => (<div key={index} className={`h-full border-r ${day.getUTCDay() === 0 || day.getUTCDay() === 6 ? 'bg-gray-50/50' : 'border-gray-100'}`} style={{ width: dayWidth }}></div>))}</div>
                          {cycles.map(cycle => {
@@ -744,15 +741,15 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                              const startOffset = (cycleStart.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24);
                              const duration = Math.max(1, (cycleEnd.getTime() - cycleStart.getTime()) / (1000 * 60 * 60 * 24) + 1);
                              return (
-                                <div key={cycle.id} className="absolute top-16 bottom-0" style={{ left: `${startOffset * dayWidth}px`, width: `${duration * dayWidth}px` }}>
-                                    <div className="h-full w-full border-x" style={{ backgroundColor: cycle.color, opacity: 0.15, borderColor: cycle.color }}></div>
-                                </div>
+                                 <div key={cycle.id} className="absolute top-16 bottom-0" style={{ left: `${startOffset * dayWidth}px`, width: `${duration * dayWidth}px` }}>
+                                     <div className="h-full w-full border-x" style={{ backgroundColor: cycle.color, opacity: 0.15, borderColor: cycle.color }}></div>
+                                 </div>
                              )
-                        })}
+                         })}
                     </div>
 
-                    {/* Camada de Nomes dos Ciclos */}
-                    <div className="absolute top-16 left-0 w-full h-6 z-10 pointer-events-none">
+                    {/* --- AJUSTE 2: Camada de Nomes dos Ciclos --- */}
+                    <div className="absolute top-16 left-0 w-full h-8 z-25 pointer-events-none">
                          {cycles.map(cycle => {
                              const cycleStart = parseLocalDate(cycle.startDate);
                              const cycleEnd = parseLocalDate(cycle.endDate);
@@ -760,14 +757,21 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                              const startOffset = (cycleStart.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24);
                              const duration = Math.max(1, (cycleEnd.getTime() - cycleStart.getTime()) / (1000 * 60 * 60 * 24) + 1);
                              return (
-                                <div key={cycle.id} className="absolute top-0 flex items-center" style={{ left: `${startOffset * dayWidth}px`, width: `${duration * dayWidth}px` }}>
-                                    <div className="w-full font-bold text-center text-xs p-1 truncate" style={{ color: cycle.color }}>{cycle.name}</div>
-                                </div>
+                                 <div key={cycle.id} className="absolute top-0 flex items-center h-full" style={{ left: `${startOffset * dayWidth}px`, width: `${duration * dayWidth}px` }}>
+                                     <div 
+                                         className="w-full font-bold text-center text-sm p-1 truncate" 
+                                         style={{ 
+                                             color: '#1f2937',
+                                             textShadow: '0 0 4px white, 0 0 2px white'
+                                         }}
+                                     >
+                                         {cycle.name}
+                                     </div>
+                                 </div>
                              )
-                        })}
+                         })}
                     </div>
 
-                    {/* Camada de Tarefas */}
                     <div className="relative z-20 pt-2">
                         {Object.keys(groupedTasks).sort().map((group) => {
                             const isCollapsed = collapsedGroups[group];
@@ -782,19 +786,20 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                                                 const taskStart = parseLocalDate(task.startDate);
                                                 const taskEnd = parseLocalDate(task.endDate);
                                                 if (!taskStart || !taskEnd || taskEnd < viewStartDate || taskStart > new Date(viewStartDate).setDate(viewStartDate.getDate() + days.length)) return null;
-                                                
-                                                const startOffset = (taskStart.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24); const duration = Math.max(1, (taskEnd.getTime() - taskStart.getTime()) / (1000 * 60 * 60 * 24) + 1); const left = startOffset * dayWidth; const width = duration * dayWidth - 4;
+                                                const startOffset = (taskStart.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24);
+                                                const duration = Math.max(1, (taskEnd.getTime() - taskStart.getTime()) / (1000 * 60 * 60 * 24) + 1);
+                                                const left = startOffset * dayWidth;
+                                                const width = duration * dayWidth - 4;
                                                 const progress = calculateTaskProgress(task);
                                                 const daysRemaining = Math.ceil((taskEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                                                
                                                 return (
                                                     <div key={task.id} id={`task-${task.id}`} className="h-10 absolute flex items-center rounded-lg cursor-pointer transition-all duration-200 group task-bar" style={{ top: `${taskIndex * 48 + 5}px`, left: `${left}px`, width: `${width}px` }} onClick={() => onTaskClick(task)} title={`${task.title} - ${task.status} (${Math.round(progress)}%)`}>
                                                         <div 
                                                             className={`h-full w-full rounded-lg flex items-center overflow-hidden relative shadow-md group-hover:shadow-lg group-hover:scale-[1.02] transition-all duration-200`}
                                                             style={{ 
                                                                 backgroundColor: task.blockerLog?.some(b => !b.unblockDate) 
-                                                                    ? '#f87171' // red-400
-                                                                    : task.customColor || '#9ca3af' // gray-400
+                                                                    ? '#f87171'
+                                                                    : task.customColor || '#9ca3af'
                                                             }}
                                                         >
                                                             <div className="absolute top-0 left-0 h-full bg-black/20" style={{ width: `${progress}%` }}></div>
@@ -822,7 +827,6 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                         })}
                     </div>
 
-                     {/* Régua do Dia Atual */}
                     {todayPosition >= 0 && todayPosition <= timelineWidth && (
                         <div className="absolute top-0 h-full w-0.5 bg-red-500 z-30 pointer-events-none" style={{ left: todayPosition }}>
                             <div className="absolute -top-1 -translate-x-1/2 left-1/2 bg-red-500 rounded-full w-2 h-2"></div>
@@ -833,6 +837,7 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
         </div>
     );
 };
+
 
 const FilterList = ({ title, options, active, onFilterChange }) => (
     <div className="flex items-center gap-2">
@@ -875,7 +880,7 @@ const WorkspaceView = ({ tasks, cycles, onTaskClick, filters, setFilters, zoomLe
                             <button onClick={() => setZoomLevel(z => Math.max(1, z - 1))} className="p-2 rounded-full hover:bg-gray-200 transition-colors"><ZoomOut size={20} /></button>
                             <input type="range" min="1" max="10" value={zoomLevel} onChange={e => setZoomLevel(Number(e.target.value))} className="w-24" />
                             <button onClick={() => setZoomLevel(z => Math.min(10, z + 1))} className="p-2 rounded-full hover:bg-gray-200 transition-colors"><ZoomIn size={20} /></button>
-                        </div>
+                         </div>
                     </div>
                      <div className="flex flex-wrap justify-start items-center gap-4 border-t pt-4 mt-2">
                         <FilterList title="Prioridade" options={PRIORITIES} active={filters.priority} onFilterChange={val => setFilters({...filters, priority: val})}/>
