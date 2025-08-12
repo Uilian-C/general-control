@@ -886,7 +886,7 @@ const WorkspaceView = ({ tasks, cycles, onTaskClick, filters, setFilters, zoomLe
     );
 };
 
-// --- VISÃO EXECUTIVA (REFORMULADA) ---
+// --- VISÃO EXECUTIVA ---
 const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
     const executiveViewRef = useRef(null);
     const [nextStepsPriority, setNextStepsPriority] = useState('Alta');
@@ -940,11 +940,7 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
         const okrsDetails = okrs.map(okr => {
             const progress = calculateOkrProgress(okr);
             const status = calculateOkrStatus(okr.startDate, okr.targetDate, progress);
-            return {
-                ...okr,
-                progress,
-                status 
-            };
+            return { ...okr, progress, status };
         }).sort((a,b) => a.progress - b.progress);
         
         const totalOkrProgress = okrsDetails.reduce((sum, okr) => sum + okr.progress, 0);
@@ -1372,9 +1368,17 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
     const [expandedOkrs, setExpandedOkrs] = useState({});
     const [itemToDelete, setItemToDelete] = useState(null);
     const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
+    
+    // NOVO ESTADO: para controlar a expansão da lista de tarefas de cada OKR
+    const [expandedTasks, setExpandedTasks] = useState({});
 
     const toggleExpansion = (okrId) => {
         setExpandedOkrs(prev => ({ ...prev, [okrId]: !prev[okrId] }));
+    };
+
+    // NOVA FUNÇÃO: para expandir/recolher a lista de tarefas
+    const toggleTasksExpansion = (okrId) => {
+        setExpandedTasks(prev => ({ ...prev, [okrId]: !prev[okrId] }));
     };
 
     const handleSave = (okrData) => {
@@ -1461,9 +1465,8 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
                         const progress = calculateOkrProgress(okr);
                         const isExpanded = !!expandedOkrs[okr.id];
                         const okrStatus = calculateOkrStatus(okr.startDate, okr.targetDate, progress);
-                        
-                        // Filtra as tarefas relacionadas a este OKR
                         const relatedTasks = tasks.filter(task => task.okrLink?.okrId === okr.id);
+                        const areTasksExpanded = !!expandedTasks[okr.id];
 
                         return (
                             <Card key={okr.id} className={`transition-all duration-300 overflow-hidden ${layout === 'list' ? '!p-0' : ''}`}>
@@ -1501,7 +1504,7 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
                                 </div>
                                 
                                 {layout === 'list' && (
-                                    <div className={`transition-all duration-500 ease-in-out bg-gray-50/50 ${isExpanded ? 'max-h-[1500px] py-4' : 'max-h-0'}`}>
+                                    <div className={`transition-all duration-500 ease-in-out bg-gray-50/50 ${isExpanded ? 'max-h-[2500px] py-4' : 'max-h-0'}`}>
                                         <div className="px-6 space-y-3">
                                             {okr.keyResults.map(kr => (
                                                 <KrItem key={kr.id} kr={kr} 
@@ -1514,26 +1517,30 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
                                             ))}
                                         </div>
                                         
-                                        {/* NOVA SEÇÃO DE ATIVIDADES VINCULADAS */}
                                         {relatedTasks.length > 0 && (
                                             <div className="px-6 mt-4 pt-4 border-t border-gray-200">
-                                                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center">
-                                                    <Layers size={14} className="mr-2" />
-                                                    Atividades Vinculadas
-                                                </h4>
-                                                <ul className="space-y-2">
-                                                    {relatedTasks.map(task => (
-                                                        <li key={task.id} className="text-sm text-gray-800 flex items-center justify-between p-2 bg-white rounded-md border">
-                                                            <div className="flex items-center">
-                                                                <ArrowRight size={14} className="mr-2 text-gray-400" />
-                                                                <span>{task.title}</span>
-                                                            </div>
-                                                            <span className={`text-xs px-2 py-0.5 rounded-full ${STATUSES[task.status]?.color || 'bg-gray-200 text-gray-800'}`}>
-                                                                {task.status}
-                                                            </span>
-                                                        </li>
-                                                    ))}
-                                                </ul>
+                                                <div onClick={() => toggleTasksExpansion(okr.id)} className="flex justify-between items-center cursor-pointer select-none">
+                                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center">
+                                                        <Layers size={14} className="mr-2" />
+                                                        Atividades Vinculadas ({relatedTasks.length})
+                                                    </h4>
+                                                    <ChevronDown size={20} className={`text-gray-500 transition-transform duration-300 ${areTasksExpanded ? 'rotate-180' : ''}`} />
+                                                </div>
+                                                <div className={`transition-all duration-500 ease-in-out overflow-hidden ${areTasksExpanded ? 'max-h-[500px] mt-3' : 'max-h-0'}`}>
+                                                    <ul className="space-y-2">
+                                                        {relatedTasks.map(task => (
+                                                            <li key={task.id} className="text-sm text-gray-800 flex items-center justify-between p-2 bg-white rounded-md border">
+                                                                <div className="flex items-center">
+                                                                    <ArrowRight size={14} className="mr-2 text-gray-400" />
+                                                                    <span>{task.title}</span>
+                                                                </div>
+                                                                <span className={`text-xs px-2 py-0.5 rounded-full ${STATUSES[task.status]?.color || 'bg-gray-200 text-gray-800'}`}>
+                                                                    {task.status}
+                                                                </span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
@@ -1546,7 +1553,6 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
         </>
     );
 };
-
 
 // --- Componente de Login ---
 const LoginScreen = () => {
