@@ -731,9 +731,7 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                     <div className="relative">
                         {/* 2. CAMADA DE FUNDO (GRID E CORES DOS CICLOS) */}
                         <div className="absolute top-0 left-0 w-full h-full z-0">
-                            {/* Linhas da grade vertical */}
                             <div className="flex h-full">{days.map((day, index) => (<div key={index} className={`h-full border-r ${day.getUTCDay() === 0 || day.getUTCDay() === 6 ? 'bg-gray-50/50' : 'border-gray-100'}`} style={{ width: dayWidth }}></div>))}</div>
-                            {/* Fundos coloridos dos ciclos */}
                             {cycles.map(cycle => {
                                 const cycleStart = parseLocalDate(cycle.startDate);
                                 const cycleEnd = parseLocalDate(cycle.endDate);
@@ -772,7 +770,6 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                                 const isCollapsed = collapsedGroups[group];
                                 return (
                                     <div key={group}>
-                                        {/* O 'top' foi ajustado para 96px (64px do header + 32px da linha de ciclos) */}
                                         <div className="sticky top-[96px] z-20 flex items-center h-10 bg-white/80 backdrop-blur-sm border-b border-t border-gray-200 -ml-px" onClick={() => toggleGroup(group)}>
                                             <div className="flex items-center gap-2 p-2 cursor-pointer"><ChevronsUpDown size={16} className={`transition-transform ${isCollapsed ? '-rotate-90' : ''}`} /><h3 className="font-bold text-gray-800">{group}</h3></div>
                                         </div>
@@ -827,6 +824,7 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
         </div>
     );
 };
+
 
 const FilterList = ({ title, options, active, onFilterChange }) => (
     <div className="flex items-center gap-2">
@@ -1366,7 +1364,8 @@ const KrItem = ({ kr, okrStartDate, okrTargetDate, onUpdate, onDeleteUpdate, onS
     );
 };
 
-const OkrView = ({ okrs, onSave, onDelete }) => {
+// --- Componente OkrView MODIFICADO ---
+const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
     const [layout, setLayout] = useState('list');
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingOkr, setEditingOkr] = useState(null);
@@ -1407,7 +1406,7 @@ const OkrView = ({ okrs, onSave, onDelete }) => {
     };
     
     const handleDeleteUpdate = (okr, krId, updateId) => {
-        // TODO: Implementar lógica de deleção de update se necessário
+        // Lógica de deleção de update (se necessário)
     };
 
     const handleEdit = (okr) => {
@@ -1462,6 +1461,10 @@ const OkrView = ({ okrs, onSave, onDelete }) => {
                         const progress = calculateOkrProgress(okr);
                         const isExpanded = !!expandedOkrs[okr.id];
                         const okrStatus = calculateOkrStatus(okr.startDate, okr.targetDate, progress);
+                        
+                        // Filtra as tarefas relacionadas a este OKR
+                        const relatedTasks = tasks.filter(task => task.okrLink?.okrId === okr.id);
+
                         return (
                             <Card key={okr.id} className={`transition-all duration-300 overflow-hidden ${layout === 'list' ? '!p-0' : ''}`}>
                                 <div className={layout === 'list' ? 'p-6' : 'p-0'}>
@@ -1477,9 +1480,14 @@ const OkrView = ({ okrs, onSave, onDelete }) => {
                                             <Calendar size={14} />
                                             <span>{formatDate(okr.startDate)} - {formatDate(okr.targetDate)}</span>
                                         </div>
-                                        <div className={`flex items-center gap-2 px-2 py-1 text-xs font-semibold text-white rounded-full ${okrStatus.color}`}>
-                                            <TrendingUpIcon size={14} />
-                                            <span>{okrStatus.text}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`px-2 py-0.5 text-xs font-semibold text-white rounded-full ${okrStatus.color}`}>{okrStatus.text}</span>
+                                            {relatedTasks.length > 0 && layout === 'list' && (
+                                                <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-semibold text-gray-600 bg-gray-200 rounded-full">
+                                                    <Layers size={12} />
+                                                    {relatedTasks.length}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                     
@@ -1493,7 +1501,7 @@ const OkrView = ({ okrs, onSave, onDelete }) => {
                                 </div>
                                 
                                 {layout === 'list' && (
-                                    <div className={`transition-all duration-500 ease-in-out bg-gray-50/50 ${isExpanded ? 'max-h-[1000px] py-4' : 'max-h-0'}`}>
+                                    <div className={`transition-all duration-500 ease-in-out bg-gray-50/50 ${isExpanded ? 'max-h-[1500px] py-4' : 'max-h-0'}`}>
                                         <div className="px-6 space-y-3">
                                             {okr.keyResults.map(kr => (
                                                 <KrItem key={kr.id} kr={kr} 
@@ -1505,6 +1513,29 @@ const OkrView = ({ okrs, onSave, onDelete }) => {
                                                 />
                                             ))}
                                         </div>
+                                        
+                                        {/* NOVA SEÇÃO DE ATIVIDADES VINCULADAS */}
+                                        {relatedTasks.length > 0 && (
+                                            <div className="px-6 mt-4 pt-4 border-t border-gray-200">
+                                                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center">
+                                                    <Layers size={14} className="mr-2" />
+                                                    Atividades Vinculadas
+                                                </h4>
+                                                <ul className="space-y-2">
+                                                    {relatedTasks.map(task => (
+                                                        <li key={task.id} className="text-sm text-gray-800 flex items-center justify-between p-2 bg-white rounded-md border">
+                                                            <div className="flex items-center">
+                                                                <ArrowRight size={14} className="mr-2 text-gray-400" />
+                                                                <span>{task.title}</span>
+                                                            </div>
+                                                            <span className={`text-xs px-2 py-0.5 rounded-full ${STATUSES[task.status]?.color || 'bg-gray-200 text-gray-800'}`}>
+                                                                {task.status}
+                                                            </span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </Card>
@@ -1515,6 +1546,7 @@ const OkrView = ({ okrs, onSave, onDelete }) => {
         </>
     );
 };
+
 
 // --- Componente de Login ---
 const LoginScreen = () => {
@@ -1825,6 +1857,7 @@ export default function App() {
                     {view === 'okr' && (
                         <OkrView 
                             okrs={okrs}
+                            tasks={tasks}
                             onSave={handleSaveOkr}
                             onDelete={requestDelete}
                         />
