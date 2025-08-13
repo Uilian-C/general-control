@@ -79,36 +79,46 @@ const getDaysInView = (startDate, endDate) => {
     return days;
 };
 
-// --- FUNÇÃO DE EXPORTAÇÃO FINAL COM ESPERA INTELIGENTE PELA BIBLIOTECA ---
+// --- FUNÇÃO DE EXPORTAÇÃO FINAL COM INJEÇÃO DINÂMICA DE SCRIPT ---
+
+// Flag global para garantir que o script seja carregado apenas uma vez
+let domToImageScriptLoaded = false;
+
 const exportViewAsImage = async (elementRef, fileName, options = {}) => {
     const { backgroundColor = '#f9fafb' } = options;
     const element = elementRef.current;
 
-    // Função auxiliar que retorna uma Promessa que só resolve quando a biblioteca estiver pronta
-    const waitForLibrary = () => {
+    // Função para carregar a biblioteca de forma dinâmica e segura
+    const loadLibrary = () => {
         return new Promise((resolve, reject) => {
-            let attempts = 0;
-            const maxAttempts = 50; // Tenta por 5 segundos no máximo
-            const interval = setInterval(() => {
-                // Se a biblioteca foi encontrada no escopo global, para de esperar e continua
-                if (window.domtoimage) {
-                    clearInterval(interval);
-                    resolve();
-                } else {
-                    attempts++;
-                    // Se exceder o tempo limite, desiste e retorna um erro
-                    if (attempts > maxAttempts) {
-                        clearInterval(interval);
-                        reject(new Error("A biblioteca de exportação (dom-to-image-more) não conseguiu carregar a tempo. Verifique a conexão com a internet ou o link do script no HTML."));
-                    }
-                }
-            }, 100); // Verifica a cada 100ms
+            // Se a biblioteca já foi carregada, resolve imediatamente.
+            if (domToImageScriptLoaded && window.domtoimage) {
+                return resolve();
+            }
+            
+            // Cria a tag de script
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/dom-to-image-more/2.9.6/dom-to-image-more.min.js';
+            
+            // Quando carregar com sucesso, marca como carregada e resolve a promessa
+            script.onload = () => {
+                domToImageScriptLoaded = true;
+                resolve();
+            };
+            
+            // Em caso de erro de rede ou bloqueio
+            script.onerror = () => {
+                reject(new Error("Falha crítica ao carregar o script de exportação. Verifique a conexão com a internet ou possíveis bloqueios de rede (Firewall/Proxy)."));
+            };
+            
+            // Adiciona o script à página
+            document.body.appendChild(script);
         });
     };
 
     try {
-        // ETAPA 1: Espera a biblioteca carregar
-        await waitForLibrary();
+        // ETAPA 1: Garante que a biblioteca esteja carregada
+        await loadLibrary();
 
         if (!element) {
             throw new Error("Não foi possível encontrar a área para exportar.");
