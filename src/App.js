@@ -79,7 +79,7 @@ const getDaysInView = (startDate, endDate) => {
     return days;
 };
 
-// NOVO: Função reutilizável para exportar uma view como imagem PNG
+// Função reutilizável para exportar uma view como imagem PNG
 const exportViewAsImage = async (elementRef, fileName, options = {}) => {
     const { backgroundColor = '#f9fafb' } = options;
 
@@ -89,7 +89,8 @@ const exportViewAsImage = async (elementRef, fileName, options = {}) => {
     }
 
     // Usa a biblioteca html2canvas para "tirar a foto" da área especificada
-    const canvas = await html2canvas(elementRef.current, {
+    // AQUI ESTÁ A CORREÇÃO: "window.html2canvas"
+    const canvas = await window.html2canvas(elementRef.current, {
         useCORS: true,
         scale: 2, // Aumenta a resolução para ficar bom no PPT
         backgroundColor: backgroundColor, // Garante um fundo sólido
