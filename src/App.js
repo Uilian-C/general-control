@@ -79,7 +79,7 @@ const getDaysInView = (startDate, endDate) => {
     return days;
 };
 
-// --- FUNÇÃO DE EXPORTAÇÃO DE IMAGEM CORRIGIDA ---
+// --- FUNÇÃO DE EXPORTAÇÃO DE IMAGEM (VERSÃO DEFINITIVA) ---
 const exportViewAsImage = async (elementRef, fileName, options = {}) => {
     const { backgroundColor = '#f9fafb', useScrollWidth = false } = options;
     const element = elementRef.current;
@@ -89,30 +89,42 @@ const exportViewAsImage = async (elementRef, fileName, options = {}) => {
         return;
     }
 
-    // Estilos para desativar transições e garantir renderização estática
+    // Adiciona uma classe ao corpo para aplicar estilos globais durante a exportação.
+    document.body.classList.add('exporting-now');
+
+    // Estilos avançados para forçar a renderização nítida do texto e desativar animações.
     const style = document.createElement('style');
     style.innerHTML = `
-        .exporting * {
+        .exporting-now * {
             transition: none !important;
             animation: none !important;
             transform: none !important;
+            text-rendering: optimizeLegibility !important;
+            -webkit-font-smoothing: antialiased !important;
+            -moz-osx-font-smoothing: grayscale !important;
         }
     `;
     document.head.appendChild(style);
-    document.body.classList.add('exporting');
 
     const elementsToHide = element.querySelectorAll('.no-export');
     elementsToHide.forEach(el => el.style.visibility = 'hidden');
+    
+    // Adiciona um padding temporário para evitar cortes nas bordas
+    const originalPadding = element.style.padding;
+    element.style.padding = '20px';
 
     try {
         const canvas = await window.html2canvas(element, {
             useCORS: true,
-            scale: 2, // Aumenta a resolução
+            // Aumenta a escala para maior resolução e detalhes de fonte
+            scale: 3,
             backgroundColor: backgroundColor,
             width: useScrollWidth ? element.scrollWidth : element.offsetWidth,
             height: useScrollWidth ? element.scrollHeight : element.offsetHeight,
-            removeContainer: false, // Mantém o container temporário para depuração se necessário
-            logging: false // Desativa logs no console
+            // Opção crucial para renderização de texto
+            letterRendering: true,
+            removeContainer: true,
+            logging: false
         });
 
         const image = canvas.toDataURL("image/png", 1.0);
@@ -122,17 +134,19 @@ const exportViewAsImage = async (elementRef, fileName, options = {}) => {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+
     } catch (error) {
         console.error("Erro ao exportar a imagem:", error);
         alert("Ocorreu um erro ao tentar exportar a imagem.");
+
     } finally {
-        // Limpeza: remove os estilos e a classe, e reexibe os elementos
+        // Limpeza completa: remove estilos, classes e restaura visibilidade e padding.
         document.head.removeChild(style);
-        document.body.classList.remove('exporting');
+        document.body.classList.remove('exporting-now');
         elementsToHide.forEach(el => el.style.visibility = 'visible');
+        element.style.padding = originalPadding;
     }
 };
-
 
 // --- Lógica de Cálculo de Progresso e Ritmo ---
 const calculateKrProgress = (kr) => {
