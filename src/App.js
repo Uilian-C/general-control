@@ -79,57 +79,71 @@ const getDaysInView = (startDate, endDate) => {
     return days;
 };
 
-// --- FUNÇÃO DE EXPORTAÇÃO DEFINITIVA COM 'dom-to-image-more' ---
+// --- FUNÇÃO DE EXPORTAÇÃO FINAL (HTML -> SVG -> PNG) ---
 const exportViewAsImage = async (elementRef, fileName, options = {}) => {
-    const { backgroundColor = '#f9fafb', useScrollWidth = false } = options;
+    const { backgroundColor = '#f9fafb' } = options;
     const element = elementRef.current;
 
     if (!element) {
         alert("Erro: Não foi possível encontrar a área para exportar.");
         return;
     }
-    
-    // A nova biblioteca usa um 'filter' para ignorar elementos, que é mais limpo.
+
+    // Função para ignorar elementos com a classe 'no-export'
     const filter = (node) => {
-        // Ignora os botões e outros elementos com a classe 'no-export'
-        if (node.classList && node.classList.contains('no-export')) {
-            return false;
-        }
-        return true;
+        return !(node.classList && node.classList.contains('no-export'));
     };
 
-    // Opções de configuração para a biblioteca dom-to-image-more
-    const domToImageOptions = {
+    // Opções para a conversão de DOM para SVG
+    const svgExportOptions = {
         filter: filter,
-        bgcolor: backgroundColor,
-        width: useScrollWidth ? element.scrollWidth : element.offsetWidth,
-        height: useScrollWidth ? element.scrollHeight : element.offsetHeight,
-        // Usamos um fator de escala para simular um DPI mais alto, garantindo nitidez
-        // Multiplicamos as dimensões por 2 para uma imagem 2x
-        style: {
-            'transform': 'scale(2)',
-            'transform-origin': 'top left',
-            'width': `${element.offsetWidth}px`,
-            'height': `${element.offsetHeight}px`
-        },
-        width: element.offsetWidth * 2,
-        height: element.offsetHeight * 2,
         quality: 1.0
     };
 
     try {
-        const dataUrl = await window.domtoimage.toPng(element, domToImageOptions);
-        
-        const link = document.createElement("a");
-        link.href = dataUrl;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // --- ETAPA 1: Converter o DOM para um SVG autossuficiente (com fontes e imagens embutidas) ---
+        const svgDataUrl = await window.domtoimage.toSvg(element, svgExportOptions);
+
+        // --- ETAPA 2: Desenhar o SVG em um Canvas e exportar como PNG ---
+        const image = new Image();
+        image.src = svgDataUrl;
+
+        // Precisamos esperar a imagem (baseada no SVG) carregar completamente
+        image.onload = () => {
+            // Fator de escala para alta resolução (DPI)
+            const scaleFactor = 2;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = element.offsetWidth * scaleFactor;
+            canvas.height = element.offsetHeight * scaleFactor;
+            const context = canvas.getContext('2d');
+
+            // Preenche o fundo do canvas com a cor desejada
+            context.fillStyle = backgroundColor;
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Desenha a imagem (do SVG) no canvas, aplicando a escala
+            context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+            // Converte o conteúdo do canvas para um arquivo PNG
+            const pngDataUrl = canvas.toDataURL('image/png');
+
+            // Cria e aciona o link para download
+            const link = document.createElement('a');
+            link.href = pngDataUrl;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
+        image.onerror = () => {
+             alert("Ocorreu um erro ao carregar o SVG intermediário para a conversão.");
+        }
 
     } catch (error) {
-        console.error("Erro ao exportar a imagem com dom-to-image:", error);
-        alert("Ocorreu um erro ao tentar exportar a imagem. Verifique o console para mais detalhes.");
+        console.error("Erro na ETAPA 1 (DOM para SVG):", error);
+        alert("Ocorreu um erro ao tentar converter o layout para SVG. Verifique o console para mais detalhes sobre possíveis problemas de segurança (CORS) ou CSS incompatível.");
     }
 };
 
