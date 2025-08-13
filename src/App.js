@@ -79,97 +79,43 @@ const getDaysInView = (startDate, endDate) => {
     return days;
 };
 
-// --- FUNÇÃO DE EXPORTAÇÃO FINAL COM INJEÇÃO DINÂMICA DE SCRIPT ---
-
-// Flag global para garantir que o script seja carregado apenas uma vez
-let domToImageScriptLoaded = false;
-
+// FUNÇÃO DE EXPORTAÇÃO FINAL, USANDO A BIBLIOTECA LOCAL
 const exportViewAsImage = async (elementRef, fileName, options = {}) => {
     const { backgroundColor = '#f9fafb' } = options;
     const element = elementRef.current;
 
-    // Função para carregar a biblioteca de forma dinâmica e segura
-    const loadLibrary = () => {
-        return new Promise((resolve, reject) => {
-            // Se a biblioteca já foi carregada, resolve imediatamente.
-            if (domToImageScriptLoaded && window.domtoimage) {
-                return resolve();
-            }
-            
-            // Cria a tag de script
-            const script = document.createElement('script');
-            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/dom-to-image-more/2.9.6/dom-to-image-more.min.js';
-            
-            // Quando carregar com sucesso, marca como carregada e resolve a promessa
-            script.onload = () => {
-                domToImageScriptLoaded = true;
-                resolve();
-            };
-            
-            // Em caso de erro de rede ou bloqueio
-            script.onerror = () => {
-                reject(new Error("Falha crítica ao carregar o script de exportação. Verifique a conexão com a internet ou possíveis bloqueios de rede (Firewall/Proxy)."));
-            };
-            
-            // Adiciona o script à página
-            document.body.appendChild(script);
-        });
+    if (!element) {
+        alert("Erro: Não foi possível encontrar a área para exportar.");
+        return;
+    }
+
+    const filter = (node) => {
+        return !(node.classList && node.classList.contains('no-export'));
+    };
+
+    const exportOptions = {
+        filter: filter,
+        bgcolor: backgroundColor,
+        quality: 1.0,
+        // Mantemos estas opções para garantir a melhor qualidade e evitar erros
+        cacheBust: true,
+        skipFonts: true
     };
 
     try {
-        // ETAPA 1: Garante que a biblioteca esteja carregada
-        await loadLibrary();
-
-        if (!element) {
-            throw new Error("Não foi possível encontrar a área para exportar.");
-        }
-
-        const filter = (node) => {
-            return !(node.classList && node.classList.contains('no-export'));
-        };
-
-        const svgExportOptions = {
-            filter: filter,
-            quality: 1.0,
-            cacheBust: true,
-            skipFonts: true
-        };
-
-        // ETAPA 2: Converter o DOM para um SVG
-        const svgDataUrl = await window.domtoimage.toSvg(element, svgExportOptions);
-
-        // ETAPA 3: Desenhar o SVG em um Canvas e exportar como PNG
-        const image = new Image();
-        image.src = svgDataUrl;
-
-        image.onload = () => {
-            const scaleFactor = 2;
-            const canvas = document.createElement('canvas');
-            canvas.width = element.offsetWidth * scaleFactor;
-            canvas.height = element.offsetHeight * scaleFactor;
-            const context = canvas.getContext('2d');
-
-            context.fillStyle = backgroundColor;
-            context.fillRect(0, 0, canvas.width, canvas.height);
-            context.drawImage(image, 0, 0, canvas.width, canvas.height);
-
-            const pngDataUrl = canvas.toDataURL('image/png');
-
-            const link = document.createElement('a');
-            link.href = pngDataUrl;
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        };
-
-        image.onerror = (error) => {
-             throw new Error("Ocorreu um erro ao carregar o SVG intermediário para a conversão.");
-        }
+        // Usando a variável 'domtoimage' que importamos diretamente no topo do arquivo
+        const dataUrl = await domtoimage.toPng(element, exportOptions);
+        
+        const link = document.createElement("a");
+        link.href = dataUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
 
     } catch (error) {
-        console.error("Erro durante o processo de exportação:", error);
-        alert(`Ocorreu um erro: ${error.message}`);
+        console.error("Erro durante a exportação:", error);
+        alert(`Ocorreu um erro inesperado durante a exportação: ${error.message}`);
     }
 };
 
