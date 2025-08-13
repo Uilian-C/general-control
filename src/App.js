@@ -79,7 +79,7 @@ const getDaysInView = (startDate, endDate) => {
     return days;
 };
 
-// --- FUNÇÃO DE EXPORTAÇÃO DE IMAGEM (VERSÃO DEFINITIVA) ---
+// --- FUNÇÃO DE EXPORTAÇÃO DE IMAGEM (VERSÃO COM SUPER-RESOLUTION) ---
 const exportViewAsImage = async (elementRef, fileName, options = {}) => {
     const { backgroundColor = '#f9fafb', useScrollWidth = false } = options;
     const element = elementRef.current;
@@ -89,39 +89,46 @@ const exportViewAsImage = async (elementRef, fileName, options = {}) => {
         return;
     }
 
-    // Adiciona uma classe ao corpo para aplicar estilos globais durante a exportação.
     document.body.classList.add('exporting-now');
 
-    // Estilos avançados para forçar a renderização nítida do texto e desativar animações.
     const style = document.createElement('style');
+    // CSS Agressivo para "Super-Resolution"
+    // Aumenta drasticamente o tamanho de fontes pequenas para que sejam capturadas com mais detalhes
     style.innerHTML = `
         .exporting-now * {
             transition: none !important;
             animation: none !important;
-            transform: none !important;
             text-rendering: optimizeLegibility !important;
             -webkit-font-smoothing: antialiased !important;
             -moz-osx-font-smoothing: grayscale !important;
         }
+        /* Aumenta o tamanho das fontes pequenas para a captura */
+        .exporting-now .text-xs { font-size: 28px !important; line-height: 1.2 !important; }
+        .exporting-now .text-sm { font-size: 32px !important; line-height: 1.2 !important; }
+        .exporting-now .font-semibold { font-weight: 600 !important; }
+        .exporting-now .font-bold { font-weight: 700 !important; }
+        .exporting-now p, .exporting-now span, .exporting-now div {
+            transform: none !important; /* Garante que nenhuma transformação residual afete o layout */
+        }
+        /* Ajusta o padding de elementos comuns para acomodar a fonte maior */
+        .exporting-now [class*="px-"] { padding-left: 1rem !important; padding-right: 1rem !important; }
+        .exporting-now [class*="py-"] { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
     `;
     document.head.appendChild(style);
 
     const elementsToHide = element.querySelectorAll('.no-export');
     elementsToHide.forEach(el => el.style.visibility = 'hidden');
     
-    // Adiciona um padding temporário para evitar cortes nas bordas
     const originalPadding = element.style.padding;
     element.style.padding = '20px';
 
     try {
         const canvas = await window.html2canvas(element, {
             useCORS: true,
-            // Aumenta a escala para maior resolução e detalhes de fonte
-            scale: 3,
+            scale: 3, // Mantemos a alta escala para capturar os detalhes
             backgroundColor: backgroundColor,
             width: useScrollWidth ? element.scrollWidth : element.offsetWidth,
             height: useScrollWidth ? element.scrollHeight : element.offsetHeight,
-            // Opção crucial para renderização de texto
             letterRendering: true,
             removeContainer: true,
             logging: false
@@ -140,7 +147,7 @@ const exportViewAsImage = async (elementRef, fileName, options = {}) => {
         alert("Ocorreu um erro ao tentar exportar a imagem.");
 
     } finally {
-        // Limpeza completa: remove estilos, classes e restaura visibilidade e padding.
+        // Limpeza completa
         document.head.removeChild(style);
         document.body.classList.remove('exporting-now');
         elementsToHide.forEach(el => el.style.visibility = 'visible');
