@@ -79,7 +79,7 @@ const getDaysInView = (startDate, endDate) => {
     return days;
 };
 
-// VERSÃO APRIMORADA: Função reutilizável para exportar uma view como imagem PNG
+// VERSÃO FINAL: Função que adiciona padding temporário para evitar cortes
 const exportViewAsImage = async (elementRef, fileName, options = {}) => {
     const { backgroundColor = '#f9fafb', useScrollWidth = false } = options;
 
@@ -89,26 +89,24 @@ const exportViewAsImage = async (elementRef, fileName, options = {}) => {
         return;
     }
 
-    // 1. Encontra todos os elementos que não devem aparecer na exportação
     const elementsToHide = element.querySelectorAll('.no-export');
-    
+    const originalPadding = element.style.padding;
+
     try {
-        // 2. Esconde temporariamente os elementos
         elementsToHide.forEach(el => {
             el.style.display = 'none';
         });
 
-        // 3. Tira a "foto" da área limpa
+        element.style.padding = '2rem';
+
         const canvas = await window.html2canvas(element, {
             useCORS: true,
-            scale: 2, // Alta resolução para PPT
+            scale: 2,
             backgroundColor: backgroundColor,
-            // Melhoria para a timeline: captura a largura total do scroll
             width: useScrollWidth ? element.scrollWidth : element.offsetWidth,
             height: useScrollWidth ? element.scrollHeight : element.offsetHeight,
         });
 
-        // 4. Cria o link e dispara o download
         const image = canvas.toDataURL("image/png", 1.0);
         const link = document.createElement("a");
         link.href = image;
@@ -121,10 +119,10 @@ const exportViewAsImage = async (elementRef, fileName, options = {}) => {
         console.error("Erro ao exportar a imagem:", error);
         alert("Ocorreu um erro ao tentar exportar a imagem.");
     } finally {
-        // 5. GARANTE que os elementos voltem a aparecer, mesmo se der erro
         elementsToHide.forEach(el => {
-            el.style.display = ''; // Volta ao display padrão
+            el.style.display = '';
         });
+        element.style.padding = originalPadding;
     }
 };
 
