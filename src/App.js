@@ -79,7 +79,7 @@ const getDaysInView = (startDate, endDate) => {
     return days;
 };
 
-// --- FUNÇÃO DE EXPORTAÇÃO DE IMAGEM (VERSÃO COM SUPER-RESOLUTION) ---
+// --- FUNÇÃO DE EXPORTAÇÃO DEFINITIVA COM 'dom-to-image-more' ---
 const exportViewAsImage = async (elementRef, fileName, options = {}) => {
     const { backgroundColor = '#f9fafb', useScrollWidth = false } = options;
     const element = elementRef.current;
@@ -88,70 +88,48 @@ const exportViewAsImage = async (elementRef, fileName, options = {}) => {
         alert("Erro: Não foi possível encontrar a área para exportar.");
         return;
     }
-
-    document.body.classList.add('exporting-now');
-
-    const style = document.createElement('style');
-    // CSS Agressivo para "Super-Resolution"
-    // Aumenta drasticamente o tamanho de fontes pequenas para que sejam capturadas com mais detalhes
-    style.innerHTML = `
-        .exporting-now * {
-            transition: none !important;
-            animation: none !important;
-            text-rendering: optimizeLegibility !important;
-            -webkit-font-smoothing: antialiased !important;
-            -moz-osx-font-smoothing: grayscale !important;
-        }
-        /* Aumenta o tamanho das fontes pequenas para a captura */
-        .exporting-now .text-xs { font-size: 28px !important; line-height: 1.2 !important; }
-        .exporting-now .text-sm { font-size: 32px !important; line-height: 1.2 !important; }
-        .exporting-now .font-semibold { font-weight: 600 !important; }
-        .exporting-now .font-bold { font-weight: 700 !important; }
-        .exporting-now p, .exporting-now span, .exporting-now div {
-            transform: none !important; /* Garante que nenhuma transformação residual afete o layout */
-        }
-        /* Ajusta o padding de elementos comuns para acomodar a fonte maior */
-        .exporting-now [class*="px-"] { padding-left: 1rem !important; padding-right: 1rem !important; }
-        .exporting-now [class*="py-"] { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
-    `;
-    document.head.appendChild(style);
-
-    const elementsToHide = element.querySelectorAll('.no-export');
-    elementsToHide.forEach(el => el.style.visibility = 'hidden');
     
-    const originalPadding = element.style.padding;
-    element.style.padding = '20px';
+    // A nova biblioteca usa um 'filter' para ignorar elementos, que é mais limpo.
+    const filter = (node) => {
+        // Ignora os botões e outros elementos com a classe 'no-export'
+        if (node.classList && node.classList.contains('no-export')) {
+            return false;
+        }
+        return true;
+    };
+
+    // Opções de configuração para a biblioteca dom-to-image-more
+    const domToImageOptions = {
+        filter: filter,
+        bgcolor: backgroundColor,
+        width: useScrollWidth ? element.scrollWidth : element.offsetWidth,
+        height: useScrollWidth ? element.scrollHeight : element.offsetHeight,
+        // Usamos um fator de escala para simular um DPI mais alto, garantindo nitidez
+        // Multiplicamos as dimensões por 2 para uma imagem 2x
+        style: {
+            'transform': 'scale(2)',
+            'transform-origin': 'top left',
+            'width': `${element.offsetWidth}px`,
+            'height': `${element.offsetHeight}px`
+        },
+        width: element.offsetWidth * 2,
+        height: element.offsetHeight * 2,
+        quality: 1.0
+    };
 
     try {
-        const canvas = await window.html2canvas(element, {
-            useCORS: true,
-            scale: 3, // Mantemos a alta escala para capturar os detalhes
-            backgroundColor: backgroundColor,
-            width: useScrollWidth ? element.scrollWidth : element.offsetWidth,
-            height: useScrollWidth ? element.scrollHeight : element.offsetHeight,
-            letterRendering: true,
-            removeContainer: true,
-            logging: false
-        });
-
-        const image = canvas.toDataURL("image/png", 1.0);
+        const dataUrl = await window.domtoimage.toPng(element, domToImageOptions);
+        
         const link = document.createElement("a");
-        link.href = image;
+        link.href = dataUrl;
         link.download = fileName;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
 
     } catch (error) {
-        console.error("Erro ao exportar a imagem:", error);
-        alert("Ocorreu um erro ao tentar exportar a imagem.");
-
-    } finally {
-        // Limpeza completa
-        document.head.removeChild(style);
-        document.body.classList.remove('exporting-now');
-        elementsToHide.forEach(el => el.style.visibility = 'visible');
-        element.style.padding = originalPadding;
+        console.error("Erro ao exportar a imagem com dom-to-image:", error);
+        alert("Ocorreu um erro ao tentar exportar a imagem. Verifique o console para mais detalhes.");
     }
 };
 
