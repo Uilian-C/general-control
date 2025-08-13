@@ -79,39 +79,61 @@ const getDaysInView = (startDate, endDate) => {
     return days;
 };
 
-// --- FUNÇÃO DE EXPORTAÇÃO FINAL E CORRIGIDA (IGNORANDO FONTES EXTERNAS) ---
+// --- FUNÇÃO DE EXPORTAÇÃO FINAL COM ESPERA INTELIGENTE PELA BIBLIOTECA ---
 const exportViewAsImage = async (elementRef, fileName, options = {}) => {
     const { backgroundColor = '#f9fafb' } = options;
     const element = elementRef.current;
 
-    if (!element) {
-        alert("Erro: Não foi possível encontrar a área para exportar.");
-        return;
-    }
-
-    const filter = (node) => {
-        return !(node.classList && node.classList.contains('no-export'));
-    };
-
-    // Opções para a conversão de DOM para SVG
-    const svgExportOptions = {
-        filter: filter,
-        quality: 1.0,
-        // --- OPÇÕES ADICIONADAS PARA GARANTIR A EXECUÇÃO ---
-        cacheBust: true, // Evita problemas de cache com imagens
-        skipFonts: true  // Instrução para NÃO tentar carregar e embutir fontes externas (Causa provável do erro)
+    // Função auxiliar que retorna uma Promessa que só resolve quando a biblioteca estiver pronta
+    const waitForLibrary = () => {
+        return new Promise((resolve, reject) => {
+            let attempts = 0;
+            const maxAttempts = 50; // Tenta por 5 segundos no máximo
+            const interval = setInterval(() => {
+                // Se a biblioteca foi encontrada no escopo global, para de esperar e continua
+                if (window.domtoimage) {
+                    clearInterval(interval);
+                    resolve();
+                } else {
+                    attempts++;
+                    // Se exceder o tempo limite, desiste e retorna um erro
+                    if (attempts > maxAttempts) {
+                        clearInterval(interval);
+                        reject(new Error("A biblioteca de exportação (dom-to-image-more) não conseguiu carregar a tempo. Verifique a conexão com a internet ou o link do script no HTML."));
+                    }
+                }
+            }, 100); // Verifica a cada 100ms
+        });
     };
 
     try {
-        // ETAPA 1: Converter o DOM para um SVG autossuficiente
+        // ETAPA 1: Espera a biblioteca carregar
+        await waitForLibrary();
+
+        if (!element) {
+            throw new Error("Não foi possível encontrar a área para exportar.");
+        }
+
+        const filter = (node) => {
+            return !(node.classList && node.classList.contains('no-export'));
+        };
+
+        const svgExportOptions = {
+            filter: filter,
+            quality: 1.0,
+            cacheBust: true,
+            skipFonts: true
+        };
+
+        // ETAPA 2: Converter o DOM para um SVG
         const svgDataUrl = await window.domtoimage.toSvg(element, svgExportOptions);
 
-        // ETAPA 2: Desenhar o SVG em um Canvas e exportar como PNG
+        // ETAPA 3: Desenhar o SVG em um Canvas e exportar como PNG
         const image = new Image();
         image.src = svgDataUrl;
 
         image.onload = () => {
-            const scaleFactor = 2; // Fator de escala para alta resolução
+            const scaleFactor = 2;
             const canvas = document.createElement('canvas');
             canvas.width = element.offsetWidth * scaleFactor;
             canvas.height = element.offsetHeight * scaleFactor;
@@ -132,13 +154,12 @@ const exportViewAsImage = async (elementRef, fileName, options = {}) => {
         };
 
         image.onerror = (error) => {
-             console.error("Erro ao carregar a imagem SVG no canvas:", error);
-             alert("Ocorreu um erro ao carregar o SVG intermediário para a conversão.");
+             throw new Error("Ocorreu um erro ao carregar o SVG intermediário para a conversão.");
         }
 
     } catch (error) {
-        console.error("Erro na ETAPA 1 (DOM para SVG):", error);
-        alert(`Ocorreu um erro ao tentar converter o layout para SVG. Detalhe: ${error.message}. Esta versão tentou ignorar fontes externas, o que sugere que o problema pode ser outro recurso externo ou um CSS complexo.`);
+        console.error("Erro durante o processo de exportação:", error);
+        alert(`Ocorreu um erro: ${error.message}`);
     }
 };
 
