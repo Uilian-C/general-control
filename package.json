@@ -2,14 +2,13 @@
   "name": "general-control",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://Uilian-C.github.io/general-control/",
   "dependencies": {
     "firebase": "^10.12.2",
     "lucide-react": "^0.395.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-scripts": "5.0.1",
-    "web-vitals": "^2.1.4"
+    "dom-to-image-more": "^2.9.6"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -18,13 +17,21 @@
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
-    "extends": [ "react-app", "react-app/jest" ]
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
   },
   "browserslist": {
-    "production": [ ">0.2%", "not dead", "not op_mini all" ],
-    "development": [ "last 1 chrome version", "last 1 firefox version", "last 1 safari version" ]
-  },
-  "devDependencies": {
-    "tailwindcss": "^3.4.4"
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
   }
 }
