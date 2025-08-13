@@ -639,6 +639,9 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
 
 
 // --- COMPONENTE TIMELINE ---
+// ... (Este componente e todos os outros seguem abaixo, exatamente como nas versões anteriores)
+
+// --- COMPONENTE TIMELINE ---
 const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
