@@ -4,7 +4,7 @@ import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signO
 import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, serverTimestamp } from 'firebase/firestore';
 import { Target, Layers, Briefcase, Edit, Plus, Trash2, X, Settings, Tag, Palette, TrendingUp, Download, Calendar, ListTodo, ZoomIn, ZoomOut, ChevronsUpDown, CheckCircle, MoreVertical, History, Check, Zap, ChevronDown, LayoutGrid, List, AlertTriangle, Clock, TrendingUp as TrendingUpIcon, Lock, Unlock, Gauge, LogOut, User,LogIn, ArrowRight, Repeat, Presentation } from 'lucide-react';
 
-// --- ATENÇÃO: Para a funcionalidade de exportar PDF funcionar ---
+// --- ATENÇÃO: Para a funcionalidade de exportar funcionar ---
 // Adicione estas duas linhas no <head> do seu arquivo HTML principal (ex: index.html)
 // <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 // <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -79,33 +79,53 @@ const getDaysInView = (startDate, endDate) => {
     return days;
 };
 
-// Função reutilizável para exportar uma view como imagem PNG
+// VERSÃO APRIMORADA: Função reutilizável para exportar uma view como imagem PNG
 const exportViewAsImage = async (elementRef, fileName, options = {}) => {
-    const { backgroundColor = '#f9fafb' } = options;
+    const { backgroundColor = '#f9fafb', useScrollWidth = false } = options;
 
-    if (!elementRef.current) {
+    const element = elementRef.current;
+    if (!element) {
         alert("Erro: Não foi possível encontrar a área para exportar.");
         return;
     }
 
-    // Usa a biblioteca html2canvas para "tirar a foto" da área especificada
-    // AQUI ESTÁ A CORREÇÃO: "window.html2canvas"
-    const canvas = await window.html2canvas(elementRef.current, {
-        useCORS: true,
-        scale: 2, // Aumenta a resolução para ficar bom no PPT
-        backgroundColor: backgroundColor, // Garante um fundo sólido
-        // Ignora elementos que não devem ser exportados
-        ignoreElements: (element) => element.classList.contains('no-export'),
-    });
+    // 1. Encontra todos os elementos que não devem aparecer na exportação
+    const elementsToHide = element.querySelectorAll('.no-export');
+    
+    try {
+        // 2. Esconde temporariamente os elementos
+        elementsToHide.forEach(el => {
+            el.style.display = 'none';
+        });
 
-    // Cria um link temporário para baixar a imagem
-    const image = canvas.toDataURL("image/png", 1.0);
-    const link = document.createElement("a");
-    link.href = image;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+        // 3. Tira a "foto" da área limpa
+        const canvas = await window.html2canvas(element, {
+            useCORS: true,
+            scale: 2, // Alta resolução para PPT
+            backgroundColor: backgroundColor,
+            // Melhoria para a timeline: captura a largura total do scroll
+            width: useScrollWidth ? element.scrollWidth : element.offsetWidth,
+            height: useScrollWidth ? element.scrollHeight : element.offsetHeight,
+        });
+
+        // 4. Cria o link e dispara o download
+        const image = canvas.toDataURL("image/png", 1.0);
+        const link = document.createElement("a");
+        link.href = image;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+    } catch (error) {
+        console.error("Erro ao exportar a imagem:", error);
+        alert("Ocorreu um erro ao tentar exportar a imagem.");
+    } finally {
+        // 5. GARANTE que os elementos voltem a aparecer, mesmo se der erro
+        elementsToHide.forEach(el => {
+            el.style.display = ''; // Volta ao display padrão
+        });
+    }
 };
 
 
@@ -850,7 +870,7 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
 
 
 const FilterList = ({ title, options, active, onFilterChange }) => (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 no-export">
         <label htmlFor={`filter-${title}`} className="text-sm font-medium text-gray-600">{title}:</label>
         <select
             id={`filter-${title}`}
@@ -886,7 +906,7 @@ const WorkspaceView = ({ tasks, cycles, onTaskClick, filters, setFilters, zoomLe
                     <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                          <div className="flex items-center gap-2">
                             <Button
-                                onClick={() => exportViewAsImage(viewRef, 'roadmap.png')}
+                                onClick={() => exportViewAsImage(viewRef, 'roadmap.png', { useScrollWidth: true })}
                                 variant="secondary"
                                 className="no-export"
                             >
@@ -1154,7 +1174,7 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
                              <div>
                                 <div className="flex justify-between items-center mb-2">
                                     <h4 className="font-semibold text-gray-700">Próximos Passos</h4>
-                                    <div className="flex gap-1">
+                                    <div className="flex gap-1 no-export">
                                         {Object.keys(PRIORITIES).map(p => (
                                             <button key={p} onClick={() => setNextStepsPriority(p)} className={`px-2 py-0.5 text-xs rounded-full ${nextStepsPriority === p ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>{p}</button>
                                         ))}
@@ -1382,7 +1402,7 @@ const KrItem = ({ kr, okrStartDate, okrTargetDate, onUpdate, onDeleteUpdate, onS
             <div className="p-4 bg-white rounded-lg border border-gray-200 hover:border-gray-300 transition-all space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                     <p className="font-medium text-gray-800 flex-1">{kr.text}</p>
-                    <div className="flex items-center gap-4 mt-2 sm:mt-0">
+                    <div className="flex items-center gap-4 mt-2 sm:mt-0 no-export">
                         <span className="text-xs text-gray-500">Peso: {kr.weight || 1}</span>
                         <div className="flex items-center gap-1">
                             {isUpdating ? (
@@ -2050,7 +2070,7 @@ export default function App() {
     return (
         <div className="bg-gray-50 text-gray-800 min-h-screen p-4 md:p-6 font-sans">
             <div className="max-w-full mx-auto">
-                <header className="mb-6">
+                <header className="mb-6 no-export">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                         <div>
                             <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-cyan-600">Norte Estratégico</h1>
@@ -2066,7 +2086,7 @@ export default function App() {
                             </Button>
                         </div>
                     </div>
-                     <div className="mt-4 no-export">
+                     <div className="mt-4">
                         <div className="inline-flex items-center bg-gray-200 rounded-lg p-1 space-x-1">
                             <Button onClick={() => setView('tasks')} variant={view === 'tasks' ? 'primary' : 'secondary'} className="!shadow-none"><ListTodo size={16} /> Atividades</Button>
                             <Button onClick={() => setView('workspace')} variant={view === 'workspace' ? 'primary' : 'secondary'} className="!shadow-none"><Layers size={16} /> Roadmap</Button>
