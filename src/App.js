@@ -11,53 +11,53 @@ import { Target, Layers, Briefcase, Edit, Plus, Trash2, X, Settings, Tag, Palett
 
 // --- Configuração do Firebase ---
 const firebaseConfig = {
-  apiKey: "AIzaSyCESjyYypWPaerOk9jGE2uvcjZlsuH_YrI",
-  authDomain: "general-control-fb57b.firebaseapp.com",
-  projectId: "general-control-fb57b",
-  storageBucket: "general-control-fb57b.appspot.com",
-  messagingSenderId: "939076716946",
-  appId: "1:939076716946:web:176240d8cb942b12df194b"
+    apiKey: "AIzaSyCESjyYypWPaerOk9jGE2uvcjZlsuH_YrI",
+    authDomain: "general-control-fb57b.firebaseapp.com",
+    projectId: "general-control-fb57b",
+    storageBucket: "general-control-fb57b.appspot.com",
+    messagingSenderId: "939076716946",
+    appId: "1:939076716946:web:176240d8cb942b12df194b"
 };
 
 // --- Inicialização Segura do Firebase ---
 let app;
 if (!getApps().length) {
-  app = initializeApp(firebaseConfig);
+    app = initializeApp(firebaseConfig);
 } else {
-  app = getApps()[0];
+    app = getApps()[0];
 }
 const auth = getAuth(app);
 const db = getFirestore(app);
 
 // --- Constantes e Helpers ---
 const PRIORITIES = {
-  'Alta': { label: 'Alta', color: 'bg-red-500', textColor: 'text-red-500', borderColor: 'border-red-500' },
-  'Média': { label: 'Média', color: 'bg-yellow-500', textColor: 'text-yellow-500', borderColor: 'border-yellow-500' },
-  'Baixa': { label: 'Baixa', color: 'bg-blue-500', textColor: 'text-blue-500', borderColor: 'border-blue-500' },
+    'Alta': { label: 'Alta', color: 'bg-red-500', textColor: 'text-red-500', borderColor: 'border-red-500' },
+    'Média': { label: 'Média', color: 'bg-yellow-500', textColor: 'text-yellow-500', borderColor: 'border-yellow-500' },
+    'Baixa': { label: 'Baixa', color: 'bg-blue-500', textColor: 'text-blue-500', borderColor: 'border-blue-500' },
 };
 const STATUSES = {
-  'A Fazer': { label: 'A Fazer', color: 'bg-gray-200 text-gray-800', borderColor: 'border-gray-400' },
-  'Em Progresso': { label: 'Em Progresso', color: 'bg-indigo-200 text-indigo-800', borderColor: 'border-indigo-400' },
-  'Concluído': { label: 'Concluído', color: 'bg-green-200 text-green-800', borderColor: 'border-green-500' },
-  'Bloqueado': { label: 'Bloqueado', color: 'bg-red-200 text-red-800', borderColor: 'border-red-500' },
+    'A Fazer': { label: 'A Fazer', color: 'bg-gray-200 text-gray-800', borderColor: 'border-gray-400' },
+    'Em Progresso': { label: 'Em Progresso', color: 'bg-indigo-200 text-indigo-800', borderColor: 'border-indigo-400' },
+    'Concluído': { label: 'Concluído', color: 'bg-green-200 text-green-800', borderColor: 'border-green-500' },
+    'Bloqueado': { label: 'Bloqueado', color: 'bg-red-200 text-red-800', borderColor: 'border-red-500' },
 };
 const TASK_COLORS = ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#c084fc', '#f472b6', '#a3a3a3'];
 const CYCLE_COLORS = ['#fecaca', '#fed7aa', '#bbf7d0', '#bfdbfe', '#e9d5ff', '#fbcfe8'];
 
 const formatDate = (dateInput, includeTime = false) => {
-  if (!dateInput) return '';
-  const date = dateInput.toDate ? dateInput.toDate() : new Date(dateInput);
-  const options = {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    timeZone: 'UTC'
-  };
-  if (includeTime) {
-    options.hour = '2-digit';
-    options.minute = '2-digit';
-  }
-  return new Intl.DateTimeFormat('pt-BR', options).format(date);
+    if (!dateInput) return '';
+    const date = dateInput.toDate ? dateInput.toDate() : new Date(dateInput);
+    const options = {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        timeZone: 'UTC'
+    };
+    if (includeTime) {
+        options.hour = '2-digit';
+        options.minute = '2-digit';
+    }
+    return new Intl.DateTimeFormat('pt-BR', options).format(date);
 };
 
 const parseLocalDate = (dateString) => {
@@ -78,6 +78,35 @@ const getDaysInView = (startDate, endDate) => {
     }
     return days;
 };
+
+// NOVO: Função reutilizável para exportar uma view como imagem PNG
+const exportViewAsImage = async (elementRef, fileName, options = {}) => {
+    const { backgroundColor = '#f9fafb' } = options;
+
+    if (!elementRef.current) {
+        alert("Erro: Não foi possível encontrar a área para exportar.");
+        return;
+    }
+
+    // Usa a biblioteca html2canvas para "tirar a foto" da área especificada
+    const canvas = await html2canvas(elementRef.current, {
+        useCORS: true,
+        scale: 2, // Aumenta a resolução para ficar bom no PPT
+        backgroundColor: backgroundColor, // Garante um fundo sólido
+        // Ignora elementos que não devem ser exportados
+        ignoreElements: (element) => element.classList.contains('no-export'),
+    });
+
+    // Cria um link temporário para baixar a imagem
+    const image = canvas.toDataURL("image/png", 1.0);
+    const link = document.createElement("a");
+    link.href = image;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
+
 
 // --- Lógica de Cálculo de Progresso e Ritmo ---
 const calculateKrProgress = (kr) => {
@@ -179,7 +208,7 @@ const Card = ({ children, className = '', ...props }) => (
     </div>
 );
 
-const Button = ({ onClick, children, className = '', variant = 'primary', disabled = false }) => {
+const Button = ({ onClick, children, className = '', variant = 'primary', disabled = false, ...props }) => {
     const baseClasses = 'px-4 py-2 rounded-lg font-semibold transition-all duration-300 flex items-center justify-center space-x-2 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
     const variantClasses = {
         primary: 'bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500',
@@ -188,7 +217,7 @@ const Button = ({ onClick, children, className = '', variant = 'primary', disabl
         ghost: 'bg-transparent text-gray-600 hover:bg-gray-100 focus:ring-gray-400'
     };
     return (
-        <button type="button" onClick={onClick} className={`${baseClasses} ${variantClasses[variant]} ${className}`} disabled={disabled}>
+        <button type="button" onClick={onClick} className={`${baseClasses} ${variantClasses[variant]} ${className}`} disabled={disabled} {...props}>
             {children}
         </button>
     );
@@ -668,7 +697,7 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                         currentPrimaryGroup = { key: weekKey, label: `Semana ${weekNumber}`, width: 0 };
                         primaryGroups.push(currentPrimaryGroup);
                      }
-                     currentPrimaryGroup.width += dayWidth;
+                      currentPrimaryGroup.width += dayWidth;
                     secondaryGroups.push({ key: day.toISOString(), label: day.getDate(), subLabel: new Intl.DateTimeFormat('pt-BR', { weekday: 'short', timeZone: 'UTC' }).format(day).slice(0, 3), width: dayWidth, isToday: day.toDateString() === today.toDateString() });
                 });
             }
@@ -837,6 +866,8 @@ const FilterList = ({ title, options, active, onFilterChange }) => (
 );
 
 const WorkspaceView = ({ tasks, cycles, onTaskClick, filters, setFilters, zoomLevel, setZoomLevel, viewStartDate, setViewStartDate, onOpenTaskModal, onOpenCyclesModal }) => {
+    const viewRef = useRef(null);
+
     const allLabels = useMemo(() => {
         const labelSet = new Set();
         tasks.forEach(task => (task.labels || []).forEach(label => labelSet.add(label)));
@@ -848,19 +879,26 @@ const WorkspaceView = ({ tasks, cycles, onTaskClick, filters, setFilters, zoomLe
     }, [tasks]);
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 bg-gray-50 p-4 rounded-lg" ref={viewRef}>
             <Card>
                 <div className="flex flex-col gap-4">
                     <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                          <div className="flex items-center gap-2">
-                            <Button onClick={() => setViewStartDate(new Date(new Date().setDate(new Date().getDate() - 15)))} variant="secondary">Hoje</Button>
-                            <Button onClick={onOpenCyclesModal} variant="secondary"><Repeat size={16} className="mr-2"/> Gerenciar Ciclos</Button>
-                         </div>
-                         <div className="flex items-center gap-2">
+                            <Button
+                                onClick={() => exportViewAsImage(viewRef, 'roadmap.png')}
+                                variant="secondary"
+                                className="no-export"
+                            >
+                                <Presentation size={16}/> Exportar Imagem
+                            </Button>
+                            <Button onClick={() => setViewStartDate(new Date(new Date().setDate(new Date().getDate() - 15)))} variant="secondary" className="no-export">Hoje</Button>
+                            <Button onClick={onOpenCyclesModal} variant="secondary" className="no-export"><Repeat size={16} className="mr-2"/> Gerenciar Ciclos</Button>
+                        </div>
+                         <div className="flex items-center gap-2 no-export">
                             <button onClick={() => setZoomLevel(z => Math.max(1, z - 1))} className="p-2 rounded-full hover:bg-gray-200 transition-colors"><ZoomOut size={20} /></button>
                             <input type="range" min="1" max="10" value={zoomLevel} onChange={e => setZoomLevel(Number(e.target.value))} className="w-24" />
                             <button onClick={() => setZoomLevel(z => Math.min(10, z + 1))} className="p-2 rounded-full hover:bg-gray-200 transition-colors"><ZoomIn size={20} /></button>
-                         </div>
+                        </div>
                     </div>
                      <div className="flex flex-wrap justify-start items-center gap-4 border-t pt-4 mt-2">
                         <FilterList title="Prioridade" options={PRIORITIES} active={filters.priority} onFilterChange={val => setFilters({...filters, priority: val})}/>
@@ -872,7 +910,7 @@ const WorkspaceView = ({ tasks, cycles, onTaskClick, filters, setFilters, zoomLe
                 </div>
             </Card>
             <Timeline tasks={tasks} cycles={cycles} onTaskClick={onTaskClick} zoomLevel={zoomLevel} viewStartDate={viewStartDate} />
-            <div className="mt-6 flex justify-end gap-4">
+            <div className="mt-6 flex justify-end gap-4 no-export">
                 <Button onClick={() => onOpenTaskModal()} variant="primary"><Plus size={20} className="mr-2" /> Nova Tarefa</Button>
             </div>
         </div>
@@ -881,14 +919,14 @@ const WorkspaceView = ({ tasks, cycles, onTaskClick, filters, setFilters, zoomLe
 
 // --- VISÃO EXECUTIVA ---
 const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
-    const executiveViewRef = useRef(null);
+    const viewRef = useRef(null);
     const [nextStepsPriority, setNextStepsPriority] = useState('Alta');
 
     const {
         overallRoadmapProgress,
         overallOkrProgress,
         projectStatusSummary,
-        projectProgressSummary, 
+        projectProgressSummary,
         okrsWithProgress,
         attentionPoints,
         nextSteps
@@ -1010,12 +1048,21 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
     );
 
     return (
-        <div className="space-y-6" ref={executiveViewRef}>
+        <div className="space-y-6 bg-gray-50 p-4 rounded-lg" ref={viewRef}>
             <Card>
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div>
                         <h2 className="text-3xl font-bold text-gray-800 flex items-center"><Briefcase className="mr-3 text-indigo-600" />Painel Executivo</h2>
                         <p className="text-gray-600 mt-1">Visão consolidada do progresso, metas e riscos.</p>
+                    </div>
+                    <div className="flex gap-2">
+                         <Button
+                            onClick={() => exportViewAsImage(viewRef, 'painel_executivo.png')}
+                            variant="secondary"
+                            className="no-export"
+                        >
+                            <Presentation size={16}/> Exportar Imagem
+                        </Button>
                     </div>
                 </div>
             </Card>
@@ -1174,7 +1221,7 @@ const OkrForm = ({ okr, onSave, onCancel }) => {
     };
 
     return (
-        <Card className="border-indigo-300 border-2 mt-6">
+        <Card className="border-indigo-300 border-2 mt-6 no-export">
             <h3 className="text-xl font-bold text-gray-800 mb-4">{okr ? 'Editar Objetivo' : 'Novo Objetivo'}</h3>
             <div className="space-y-6">
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1381,6 +1428,7 @@ const KrItem = ({ kr, okrStartDate, okrTargetDate, onUpdate, onDeleteUpdate, onS
 
 // --- Componente OkrView ---
 const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
+    const viewRef = useRef(null);
     const [layout, setLayout] = useState('list');
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingOkr, setEditingOkr] = useState(null);
@@ -1463,139 +1511,146 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
     }
 
     return (
-        <>
+        <div className="max-w-7xl mx-auto space-y-6 bg-gray-50 p-4 rounded-lg" ref={viewRef}> 
             <ConfirmModal isOpen={isConfirmDeleteOpen} onClose={() => setIsConfirmDeleteOpen(false)} onConfirm={confirmDeleteOkr} title="Confirmar Exclusão de Objetivo">
                 <p>Tem certeza que deseja excluir este Objetivo e todos os seus KRs? Esta ação não pode ser desfeita.</p>
             </ConfirmModal>
-            <div className="space-y-6">
-                <Card>
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                        <div className="flex-1">
-                            <h2 className="text-3xl font-bold text-gray-800 flex items-center"><Target className="mr-3 text-indigo-600" />Objetivos e Resultados-Chave</h2>
-                            <p className="text-gray-600 mt-1">Defina e acompanhe as metas que impulsionam seu roadmap.</p>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <div className="flex items-center bg-gray-100 rounded-lg p-1">
-                                <button onClick={() => setLayout('list')} className={`p-2 rounded-md transition-colors ${layout === 'list' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}><List size={20} /></button>
-                                <button onClick={() => setLayout('grid')} className={`p-2 rounded-md transition-colors ${layout === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}><LayoutGrid size={20} /></button>
-                            </div>
-                            {!isFormOpen && (
-                                <Button onClick={() => setIsFormOpen(true)} variant="primary">
-                                    <Plus size={16} /> Novo Objetivo
-                                </Button>
-                            )}
-                        </div>
+            
+            <Card>
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div className="flex-1">
+                        <h2 className="text-3xl font-bold text-gray-800 flex items-center"><Target className="mr-3 text-indigo-600" />Objetivos e Resultados-Chave</h2>
+                        <p className="text-gray-600 mt-1">Defina e acompanhe as metas que impulsionam seu roadmap.</p>
                     </div>
-                </Card>
-                {isFormOpen && <OkrForm key={editingOkr?.id || 'new'} okr={editingOkr} onSave={handleSave} onCancel={handleCancel} />}
-                <div className={layout === 'list' ? "space-y-6" : "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"}>
-                    {okrs.map(okr => {
-                        const progress = calculateOkrProgress(okr);
-                        const isExpanded = !!expandedOkrs[okr.id];
-                        const okrStatus = calculateOkrStatus(okr.startDate, okr.targetDate, progress);
-                        const relatedTasks = tasks.filter(task => task.okrLink?.okrId === okr.id);
-                        const areTasksExpanded = !!expandedTasks[okr.id];
+                    <div className="flex items-center gap-4">
+                        <Button
+                            onClick={() => exportViewAsImage(viewRef, 'okrs.png')}
+                            variant="secondary"
+                            className="no-export"
+                        >
+                            <Presentation size={16}/> Exportar Imagem
+                        </Button>
+                        <div className="flex items-center bg-gray-100 rounded-lg p-1 no-export">
+                            <button onClick={() => setLayout('list')} className={`p-2 rounded-md transition-colors ${layout === 'list' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}><List size={20} /></button>
+                            <button onClick={() => setLayout('grid')} className={`p-2 rounded-md transition-colors ${layout === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}><LayoutGrid size={20} /></button>
+                        </div>
+                        {!isFormOpen && (
+                            <Button onClick={() => setIsFormOpen(true)} variant="primary" className="no-export">
+                                <Plus size={16} /> Novo Objetivo
+                            </Button>
+                        )}
+                    </div>
+                </div>
+            </Card>
 
-                        return (
-                            <Card key={okr.id} className={`transition-all duration-300 overflow-hidden ${layout === 'list' ? '!p-0' : ''}`}>
-                                <div className={layout === 'list' ? 'p-6' : 'p-0'}>
-                                    <div className="flex justify-between items-start">
-                                        <h3 className="text-xl font-bold text-gray-800 flex-1 pr-4">{okr.objective}</h3>
-                                        <div className="flex space-x-2">
-                                            <Button onClick={(e) => { e.stopPropagation(); handleEdit(okr); }} variant="ghost" className="!p-2"><Edit size={16} /></Button>
-                                            <Button onClick={(e) => { e.stopPropagation(); requestDeleteOkr(okr.id); }} variant="ghost" className="!p-2 text-red-500 hover:bg-red-50"><Trash2 size={16} /></Button>
-                                        </div>
+            {isFormOpen && <OkrForm key={editingOkr?.id || 'new'} okr={editingOkr} onSave={handleSave} onCancel={handleCancel} />}
+            <div className={layout === 'list' ? "space-y-6" : "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"}>
+                {okrs.map(okr => {
+                    const progress = calculateOkrProgress(okr);
+                    const isExpanded = !!expandedOkrs[okr.id];
+                    const okrStatus = calculateOkrStatus(okr.startDate, okr.targetDate, progress);
+                    const relatedTasks = tasks.filter(task => task.okrLink?.okrId === okr.id);
+                    const areTasksExpanded = !!expandedTasks[okr.id];
+
+                    return (
+                        <Card key={okr.id} className={`transition-all duration-300 overflow-hidden ${layout === 'list' ? '!p-0' : ''}`}>
+                            <div className={layout === 'list' ? 'p-6' : 'p-0'}>
+                                <div className="flex justify-between items-start">
+                                    <h3 className="text-xl font-bold text-gray-800 flex-1 pr-4">{okr.objective}</h3>
+                                    <div className="flex space-x-2 no-export">
+                                        <Button onClick={(e) => { e.stopPropagation(); handleEdit(okr); }} variant="ghost" className="!p-2"><Edit size={16} /></Button>
+                                        <Button onClick={(e) => { e.stopPropagation(); requestDeleteOkr(okr.id); }} variant="ghost" className="!p-2 text-red-500 hover:bg-red-50"><Trash2 size={16} /></Button>
                                     </div>
-                                    <div className="mt-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-sm text-gray-500">
-                                        <div className="flex items-center gap-2">
-                                            <Calendar size={14} />
-                                            <span>{formatDate(okr.startDate)} - {formatDate(okr.targetDate)}</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className={`px-2 py-0.5 text-xs font-semibold text-white rounded-full ${okrStatus.color}`}>{okrStatus.text}</span>
-                                            {relatedTasks.length > 0 && layout === 'list' && (
-                                                <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-semibold text-gray-600 bg-gray-200 rounded-full">
-                                                    <Layers size={12} />
-                                                    {relatedTasks.length}
-                                                </span>
-                                            )}
-                                        </div>
+                                </div>
+                                <div className="mt-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-sm text-gray-500">
+                                    <div className="flex items-center gap-2">
+                                        <Calendar size={14} />
+                                        <span>{formatDate(okr.startDate)} - {formatDate(okr.targetDate)}</span>
                                     </div>
-                                    
-                                    <div className="mt-3 flex items-center gap-4 cursor-pointer" onClick={() => layout === 'list' && toggleExpansion(okr.id)}>
-                                        <div className="w-full bg-gray-200 rounded-full h-4">
-                                            <div className="bg-gradient-to-r from-sky-500 to-indigo-600 h-4 rounded-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
-                                        </div>
-                                        <span className="text-lg font-bold text-indigo-600">{progress}%</span>
-                                        {layout === 'list' && <ChevronDown size={20} className={`text-gray-500 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />}
+                                    <div className="flex items-center gap-2">
+                                        <span className={`px-2 py-0.5 text-xs font-semibold text-white rounded-full ${okrStatus.color}`}>{okrStatus.text}</span>
+                                        {relatedTasks.length > 0 && layout === 'list' && (
+                                            <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-semibold text-gray-600 bg-gray-200 rounded-full">
+                                                <Layers size={12} />
+                                                {relatedTasks.length}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                                 
-                                {layout === 'list' && (
-                                    <div className={`transition-all duration-500 ease-in-out bg-gray-50/50 ${isExpanded ? 'max-h-[2500px] py-4' : 'max-h-0'}`}>
-                                        <div className="px-6 space-y-3">
-                                            {okr.keyResults.map(kr => (
-                                                <KrItem key={kr.id} kr={kr} 
-                                                    okrStartDate={okr.startDate}
-                                                    okrTargetDate={okr.targetDate}
-                                                    onUpdate={(krId, newValue) => handleKrUpdate(okr, krId, newValue)} 
-                                                    onDeleteUpdate={(krId, updateId) => handleDeleteUpdate(okr, krId, updateId)}
-                                                    onSaveAttentionLog={(krId, attentionLog) => handleSaveAttentionLog(okr, krId, attentionLog)}
-                                                />
-                                            ))}
-                                        </div>
-                                        
-                                        {relatedTasks.length > 0 && (
-                                            <div className="px-6 mt-4 pt-4 border-t border-gray-200">
-                                                <div onClick={() => toggleTasksExpansion(okr.id)} className="flex justify-between items-center cursor-pointer select-none">
-                                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center">
-                                                        <Layers size={14} className="mr-2" />
-                                                        Atividades Vinculadas ({relatedTasks.length})
-                                                    </h4>
-                                                    <ChevronDown size={20} className={`text-gray-500 transition-transform duration-300 ${areTasksExpanded ? 'rotate-180' : ''}`} />
-                                                </div>
-                                                <div className={`transition-all duration-500 ease-in-out overflow-hidden ${areTasksExpanded ? 'max-h-[500px] mt-3' : 'max-h-0'}`}>
-                                                    <ul className="space-y-2">
-                                                        {relatedTasks.map(task => (
-                                                             <li key={task.id} className="text-sm p-3 bg-white rounded-md border space-y-2">
-                                                                <div className="flex justify-between items-center">
-                                                                    <span className="font-semibold text-gray-800">{task.title}</span>
-                                                                    <span className={`text-xs px-2 py-0.5 rounded-full ${STATUSES[task.status]?.color || 'bg-gray-200 text-gray-800'}`}>
-                                                                        {task.status}
-                                                                    </span>
-                                                                </div>
-                                                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs text-gray-500 gap-2">
-                                                                    <div className="flex items-center gap-4">
-                                                                        <span className="flex items-center gap-1.5" title="Prioridade">
-                                                                            <ChevronsUpDown size={14} className={PRIORITIES[task.priority]?.textColor} />
-                                                                            <strong className={PRIORITIES[task.priority]?.textColor}>{task.priority}</strong>
-                                                                        </span>
-                                                                        {task.projectTag && (
-                                                                            <span className="flex items-center gap-1.5" title="Projeto">
-                                                                                <Briefcase size={14} />
-                                                                                <span>{task.projectTag}</span>
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                    <div className="flex items-center gap-1.5" title="Duração">
-                                                                        <Calendar size={14} />
-                                                                        <span>{formatDate(task.startDate)} → {formatDate(task.endDate)}</span>
-                                                                    </div>
-                                                                </div>
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                </div>
-                                            </div>
-                                        )}
+                                <div className="mt-3 flex items-center gap-4 cursor-pointer" onClick={() => layout === 'list' && toggleExpansion(okr.id)}>
+                                    <div className="w-full bg-gray-200 rounded-full h-4">
+                                        <div className="bg-gradient-to-r from-sky-500 to-indigo-600 h-4 rounded-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
                                     </div>
-                                )}
-                            </Card>
-                        )
-                    })}
-                </div>
+                                    <span className="text-lg font-bold text-indigo-600">{progress}%</span>
+                                    {layout === 'list' && <ChevronDown size={20} className={`text-gray-500 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />}
+                                </div>
+                            </div>
+                            
+                            {layout === 'list' && (
+                                <div className={`transition-all duration-500 ease-in-out bg-gray-50/50 ${isExpanded ? 'max-h-[2500px] py-4' : 'max-h-0'}`}>
+                                    <div className="px-6 space-y-3">
+                                        {okr.keyResults.map(kr => (
+                                            <KrItem key={kr.id} kr={kr} 
+                                                okrStartDate={okr.startDate}
+                                                okrTargetDate={okr.targetDate}
+                                                onUpdate={(krId, newValue) => handleKrUpdate(okr, krId, newValue)} 
+                                                onDeleteUpdate={(krId, updateId) => handleDeleteUpdate(okr, krId, updateId)}
+                                                onSaveAttentionLog={(krId, attentionLog) => handleSaveAttentionLog(okr, krId, attentionLog)}
+                                            />
+                                        ))}
+                                    </div>
+                                    
+                                    {relatedTasks.length > 0 && (
+                                        <div className="px-6 mt-4 pt-4 border-t border-gray-200">
+                                            <div onClick={() => toggleTasksExpansion(okr.id)} className="flex justify-between items-center cursor-pointer select-none">
+                                                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center">
+                                                    <Layers size={14} className="mr-2" />
+                                                    Atividades Vinculadas ({relatedTasks.length})
+                                                </h4>
+                                                <ChevronDown size={20} className={`text-gray-500 transition-transform duration-300 ${areTasksExpanded ? 'rotate-180' : ''}`} />
+                                            </div>
+                                            <div className={`transition-all duration-500 ease-in-out overflow-hidden ${areTasksExpanded ? 'max-h-[500px] mt-3' : 'max-h-0'}`}>
+                                                <ul className="space-y-2">
+                                                    {relatedTasks.map(task => (
+                                                         <li key={task.id} className="text-sm p-3 bg-white rounded-md border space-y-2">
+                                                             <div className="flex justify-between items-center">
+                                                                 <span className="font-semibold text-gray-800">{task.title}</span>
+                                                                 <span className={`text-xs px-2 py-0.5 rounded-full ${STATUSES[task.status]?.color || 'bg-gray-200 text-gray-800'}`}>
+                                                                     {task.status}
+                                                                 </span>
+                                                             </div>
+                                                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs text-gray-500 gap-2">
+                                                                 <div className="flex items-center gap-4">
+                                                                     <span className="flex items-center gap-1.5" title="Prioridade">
+                                                                         <ChevronsUpDown size={14} className={PRIORITIES[task.priority]?.textColor} />
+                                                                         <strong className={PRIORITIES[task.priority]?.textColor}>{task.priority}</strong>
+                                                                     </span>
+                                                                     {task.projectTag && (
+                                                                         <span className="flex items-center gap-1.5" title="Projeto">
+                                                                             <Briefcase size={14} />
+                                                                             <span>{task.projectTag}</span>
+                                                                         </span>
+                                                                     )}
+                                                                 </div>
+                                                                 <div className="flex items-center gap-1.5" title="Duração">
+                                                                     <Calendar size={14} />
+                                                                     <span>{formatDate(task.startDate)} → {formatDate(task.endDate)}</span>
+                                                                 </div>
+                                                             </div>
+                                                         </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </Card>
+                    )
+                })}
             </div>
-        </>
+        </div>
     );
 };
 
@@ -1741,6 +1796,8 @@ const TaskCard = ({ task, onTaskClick }) => {
 
 // --- NOVA ABA DE ATIVIDADES (KANBAN) ---
 const TasksView = ({ tasks, onTaskClick, filters, setFilters }) => {
+    const viewRef = useRef(null);
+
     const tasksByStatus = useMemo(() => {
         const grouped = {};
         Object.keys(STATUSES).forEach(status => {
@@ -1765,14 +1822,25 @@ const TasksView = ({ tasks, onTaskClick, filters, setFilters }) => {
     }, [tasks]);
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 bg-gray-50 p-4 rounded-lg" ref={viewRef}>
             <Card>
                 <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                     <div>
                         <h2 className="text-3xl font-bold text-gray-800 flex items-center"><ListTodo className="mr-3 text-indigo-600" />Quadro de Atividades</h2>
                         <p className="text-gray-600 mt-1">Visualize e gerencie o fluxo de trabalho do dia a dia.</p>
                     </div>
-                    <Button onClick={() => onTaskClick(null)} variant="primary"><Plus size={16} /> Nova Tarefa</Button>
+                    <div className="flex gap-2">
+                        <Button
+                            onClick={() => exportViewAsImage(viewRef, 'quadro_atividades.png')}
+                            variant="secondary"
+                            className="no-export"
+                        >
+                            <Presentation size={16}/> Exportar Imagem
+                        </Button>
+                        <Button onClick={() => onTaskClick(null)} variant="primary" className="no-export">
+                            <Plus size={16} /> Nova Tarefa
+                        </Button>
+                    </div>
                 </div>
                 <div className="flex flex-wrap justify-start items-center gap-4 border-t pt-4 mt-4">
                     <FilterList title="Prioridade" options={PRIORITIES} active={filters.priority} onFilterChange={val => setFilters({...filters, priority: val})}/>
@@ -1997,7 +2065,7 @@ export default function App() {
                             </Button>
                         </div>
                     </div>
-                     <div className="mt-4">
+                     <div className="mt-4 no-export">
                         <div className="inline-flex items-center bg-gray-200 rounded-lg p-1 space-x-1">
                             <Button onClick={() => setView('tasks')} variant={view === 'tasks' ? 'primary' : 'secondary'} className="!shadow-none"><ListTodo size={16} /> Atividades</Button>
                             <Button onClick={() => setView('workspace')} variant={view === 'workspace' ? 'primary' : 'secondary'} className="!shadow-none"><Layers size={16} /> Roadmap</Button>
