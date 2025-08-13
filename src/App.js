@@ -79,7 +79,7 @@ const getDaysInView = (startDate, endDate) => {
     return days;
 };
 
-// --- FUNÇÃO DE EXPORTAÇÃO FINAL (HTML -> SVG -> PNG) ---
+// --- FUNÇÃO DE EXPORTAÇÃO FINAL E CORRIGIDA (IGNORANDO FONTES EXTERNAS) ---
 const exportViewAsImage = async (elementRef, fileName, options = {}) => {
     const { backgroundColor = '#f9fafb' } = options;
     const element = elementRef.current;
@@ -89,7 +89,6 @@ const exportViewAsImage = async (elementRef, fileName, options = {}) => {
         return;
     }
 
-    // Função para ignorar elementos com a classe 'no-export'
     const filter = (node) => {
         return !(node.classList && node.classList.contains('no-export'));
     };
@@ -97,38 +96,33 @@ const exportViewAsImage = async (elementRef, fileName, options = {}) => {
     // Opções para a conversão de DOM para SVG
     const svgExportOptions = {
         filter: filter,
-        quality: 1.0
+        quality: 1.0,
+        // --- OPÇÕES ADICIONADAS PARA GARANTIR A EXECUÇÃO ---
+        cacheBust: true, // Evita problemas de cache com imagens
+        skipFonts: true  // Instrução para NÃO tentar carregar e embutir fontes externas (Causa provável do erro)
     };
 
     try {
-        // --- ETAPA 1: Converter o DOM para um SVG autossuficiente (com fontes e imagens embutidas) ---
+        // ETAPA 1: Converter o DOM para um SVG autossuficiente
         const svgDataUrl = await window.domtoimage.toSvg(element, svgExportOptions);
 
-        // --- ETAPA 2: Desenhar o SVG em um Canvas e exportar como PNG ---
+        // ETAPA 2: Desenhar o SVG em um Canvas e exportar como PNG
         const image = new Image();
         image.src = svgDataUrl;
 
-        // Precisamos esperar a imagem (baseada no SVG) carregar completamente
         image.onload = () => {
-            // Fator de escala para alta resolução (DPI)
-            const scaleFactor = 2;
-
+            const scaleFactor = 2; // Fator de escala para alta resolução
             const canvas = document.createElement('canvas');
             canvas.width = element.offsetWidth * scaleFactor;
             canvas.height = element.offsetHeight * scaleFactor;
             const context = canvas.getContext('2d');
 
-            // Preenche o fundo do canvas com a cor desejada
             context.fillStyle = backgroundColor;
             context.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Desenha a imagem (do SVG) no canvas, aplicando a escala
             context.drawImage(image, 0, 0, canvas.width, canvas.height);
 
-            // Converte o conteúdo do canvas para um arquivo PNG
             const pngDataUrl = canvas.toDataURL('image/png');
 
-            // Cria e aciona o link para download
             const link = document.createElement('a');
             link.href = pngDataUrl;
             link.download = fileName;
@@ -137,13 +131,14 @@ const exportViewAsImage = async (elementRef, fileName, options = {}) => {
             document.body.removeChild(link);
         };
 
-        image.onerror = () => {
+        image.onerror = (error) => {
+             console.error("Erro ao carregar a imagem SVG no canvas:", error);
              alert("Ocorreu um erro ao carregar o SVG intermediário para a conversão.");
         }
 
     } catch (error) {
         console.error("Erro na ETAPA 1 (DOM para SVG):", error);
-        alert("Ocorreu um erro ao tentar converter o layout para SVG. Verifique o console para mais detalhes sobre possíveis problemas de segurança (CORS) ou CSS incompatível.");
+        alert(`Ocorreu um erro ao tentar converter o layout para SVG. Detalhe: ${error.message}. Esta versão tentou ignorar fontes externas, o que sugere que o problema pode ser outro recurso externo ou um CSS complexo.`);
     }
 };
 
