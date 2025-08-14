@@ -7,7 +7,7 @@ import domtoimage from 'dom-to-image-more';
 
 // --- Configuração do Firebase ---
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY", // Substitua pela sua chave de API
+    apiKey: "AIzaSyCESjyYypWPaerOk9jGE2uvcjZlsuH_YrI"
     authDomain: "general-control-fb57b.firebaseapp.com",
     projectId: "general-control-fb57b",
     storageBucket: "general-control-fb57b.appspot.com",
