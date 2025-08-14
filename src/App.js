@@ -7,7 +7,7 @@ import domtoimage from 'dom-to-image-more';
 
 // --- Configuração do Firebase ---
 const firebaseConfig = {
-    apiKey: "AIzaSyCESjyYypWPaerOk9jGE2uvcjZlsuH_YrI",
+    apiKey: "YOUR_API_KEY", // Substitua pela sua chave de API
     authDomain: "general-control-fb57b.firebaseapp.com",
     projectId: "general-control-fb57b",
     storageBucket: "general-control-fb57b.appspot.com",
@@ -18,9 +18,9 @@ const firebaseConfig = {
 // --- Inicialização Segura do Firebase ---
 let app;
 if (!getApps().length) {
-    app = initializeApp(firebaseConfig);
+  app = initializeApp(firebaseConfig);
 } else {
-    app = getApps()[0];
+  app = getApps()[0];
 }
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -33,11 +33,9 @@ const exportViewAsImage = async (elementRef, fileName, options = {}) => {
         alert("Erro: Não foi possível encontrar a área para exportar.");
         return;
     }
-
     const filter = (node) => {
         return !(node.classList && node.classList.contains('no-export'));
     };
-
     const scale = 2;
     const exportOptions = {
         filter: filter,
@@ -51,7 +49,6 @@ const exportViewAsImage = async (elementRef, fileName, options = {}) => {
         },
         cacheBust: true,
     };
-
     try {
         const dataUrl = await domtoimage.toPng(element, exportOptions);
         const link = document.createElement("a");
@@ -112,6 +109,7 @@ const getDaysInView = (startDate, endDate) => {
     }
     return days;
 };
+
 // --- Lógica de Cálculo de Progresso e Ritmo ---
 const calculateKrProgress = (kr) => {
     const start = Number(kr.startValue) || 0;
@@ -140,19 +138,16 @@ const calculatePacingInfo = (startDate, targetDate, startValue, targetValue, cur
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const target = parseLocalDate(targetDate);
-
     const progress = calculateKrProgress({ startValue, targetValue, currentValue });
     if (progress >= 100) {
         return { daysRemaining: null, requiredPace: null, status: 'completed' };
     }
-
     if (target < today) {
         return { daysRemaining: 0, requiredPace: null, status: 'overdue' };
     }
     const daysRemaining = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     const monthsRemaining = Math.max(1, (target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 30.44));
     const remainingValue = (Number(targetValue) || 0) - (Number(currentValue) || 0);
-
     if (remainingValue <= 0) {
         return { daysRemaining, requiredPace: 0, status: 'completed' };
     }
@@ -168,7 +163,6 @@ const calculateOkrStatus = (startDate, targetDate, currentProgress) => {
     if (currentProgress >= 100) return { status: 'completed', text: 'Concluído', color: 'bg-green-500' };
     if (target < today) return { status: 'overdue', text: 'Atrasado', color: 'bg-red-500' };
     if (today < start) return { status: 'not-started', text: 'Não iniciado', color: 'bg-gray-400' };
-
     const totalDuration = target.getTime() - start.getTime();
     if (totalDuration <= 0) return { status: 'completed', text: 'Concluído', color: 'bg-green-500' };
     const elapsedDuration = today.getTime() - start.getTime();
@@ -193,6 +187,7 @@ const getTaskDurationInDays = (task) => {
     const duration = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
     return Math.max(1, duration + 1);
 };
+
 // --- Componentes da UI ---
 const Card = ({ children, className = '', ...props }) => (
     <div className={`bg-white border border-gray-200 rounded-xl p-4 sm:p-6 shadow-sm ${className}`} {...props}>
@@ -319,7 +314,6 @@ const CyclesModal = ({ isOpen, onClose, cycles, onSave, onDelete }) => {
     );
 };
 const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest }) => {
-
     const getInitialFormState = () => {
         const today = new Date().toISOString().split('T')[0];
         if (task) {
@@ -369,12 +363,10 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
         const { name, value, type, checked } = e.target;
         setFormState(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
     };
-
     const handleLabelsChange = (e) => {
         const labels = e.target.value.split(',').map(l => l.trim()).filter(Boolean);
         setFormState(prev => ({ ...prev, labels }));
     };
-
     const handleLabelClick = (label) => {
         const currentLabels = formState.labels || [];
         const newLabels = currentLabels.includes(label)
@@ -400,7 +392,6 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
             setNewProject('');
         }
     };
-
     const addBlocker = () => {
         const newLog = [...(formState.blockerLog || []), {
             id: `block_${Date.now()}`,
@@ -411,14 +402,12 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
         }];
         setFormState(prev => ({ ...prev, blockerLog: newLog, status: 'Bloqueado' }));
     };
-
     const handleBlockerLogChange = (logId, field, value) => {
         const newLog = (formState.blockerLog || []).map(b =>
             b.id === logId ? { ...b, [field]: value } : b
         );
         setFormState(prev => ({ ...prev, blockerLog: newLog }));
     };
-
     const handleUnblock = (logId) => {
         const newLog = (formState.blockerLog || []).map(b =>
             b.id === logId ? { ...b, unblockDate: new Date().toISOString().split('T')[0] } : b
@@ -426,7 +415,6 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
         const isStillBlocked = newLog.some(b => !b.unblockDate);
         setFormState(prev => ({ ...prev, blockerLog: newLog, status: isStillBlocked ? 'Bloqueado' : 'A Fazer' }));
     };
-
     const handleSubtaskChange = (index, field, value) => {
         const newSubtasks = [...(formState.subtasks || [])];
         newSubtasks[index] = { ...newSubtasks[index], [field]: value };
@@ -440,14 +428,12 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
         const newSubtasks = (formState.subtasks || []).filter((_, i) => i !== index);
         setFormState(prev => ({ ...prev, subtasks: newSubtasks }));
     };
-
     const handleColorChange = (color) => {
         setFormState(prev => ({...prev, customColor: color}));
     };
     const handleSave = () => {
         const { okrLinkValue, ...restOfForm } = formState;
         const [okrId, krId] = (okrLinkValue || '|').split('|');
-
         const taskToSave = {
             id: task?.id,
             ...restOfForm,
@@ -463,15 +449,13 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
                 <div className="md:col-span-2 space-y-6">
                     <input type="text" name="title" value={formState.title} onChange={handleChange} placeholder="Título da Tarefa" className="w-full p-2 bg-transparent text-2xl font-bold border-b-2 border-gray-200 focus:border-indigo-500 focus:outline-none" />
                     <textarea name="description" value={formState.description} onChange={handleChange} placeholder="Adicione uma descrição..." className="w-full p-2 bg-gray-50 rounded-md h-32 border border-gray-200 focus:border-indigo-500 focus:outline-none"></textarea>
-
                     <div>
                         <h3 className="font-semibold mb-2">Subtarefas</h3>
                         <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
                             {(formState.subtasks || []).map((sub, index) => (
                                 <div key={sub.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-md">
                                     <input type="checkbox" checked={sub.completed} onChange={(e) => handleSubtaskChange(index, 'completed', e.target.checked)} className="h-5 w-5 rounded text-indigo-600" />
-                                    <input type="text" value={sub.text} onChange={(e) => handleSubtaskChange(index, 'text', e.target.value)} className={`flex-grow p-1 bg-transparent border-b ${sub.completed ?
-'line-through text-gray-500' : ''}`} placeholder="Descrição da subtarefa"/>
+                                    <input type="text" value={sub.text} onChange={(e) => handleSubtaskChange(index, 'text', e.target.value)} className={`flex-grow p-1 bg-transparent border-b ${sub.completed ? 'line-through text-gray-500' : ''}`} placeholder="Descrição da subtarefa"/>
                                     <input type="date" value={sub.targetDate || ''} onChange={(e) => handleSubtaskChange(index, 'targetDate', e.target.value)} className="p-1 text-sm border rounded-md" />
                                     <button onClick={() => removeSubtask(index)}><Trash2 size={16} className="text-red-400 hover:text-red-600" /></button>
                                 </div>
@@ -479,7 +463,6 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
                         </div>
                         <Button onClick={addSubtask} variant="secondary" className="mt-2 text-sm">Adicionar Subtarefa</Button>
                     </div>
-
                     <div>
                         <h3 className="font-semibold mb-2">Histórico de Bloqueios</h3>
                         <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
@@ -588,6 +571,7 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
         </Modal>
     );
 };
+
 // --- COMPONENTE TIMELINE ---
 const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
     const today = new Date();
@@ -596,9 +580,7 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
     const [isDragging, setIsDragging] = useState(false);
     const [startX, setStartX] = useState(0);
     const [scrollLeft, setScrollLeft] = useState(0);
-
     const dayWidth = useMemo(() => 8 + (zoomLevel * 2.5), [zoomLevel]);
-
     const { days, timelineWidth, headerGroups, subHeaderGroups } = useMemo(() => {
         let maxEndDate = null;
         const allDates = [...tasks, ...cycles].map(item => parseLocalDate(item.endDate));
@@ -614,14 +596,11 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
         if (maxEndDate && maxEndDate > defaultEndDate) {
             timelineEndDate = new Date(maxEndDate);
         }
-
         timelineEndDate.setDate(timelineEndDate.getDate() + 30);
         const days = getDaysInView(viewStartDate, timelineEndDate);
         const timelineWidth = days.length * dayWidth;
-
         const primaryGroups = [];
         const secondaryGroups = [];
-
         if (days.length > 0) {
             let currentPrimaryGroup = null;
             let currentSecondaryGroup = null;
@@ -667,7 +646,6 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                 });
             }
         }
-
         return { days, timelineWidth, headerGroups: primaryGroups, subHeaderGroups: secondaryGroups };
     }, [viewStartDate, zoomLevel, tasks, cycles]);
     const onMouseDown = (e) => {
@@ -727,7 +705,6 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                                 )
                             })}
                         </div>
-
                         <div className="relative z-10 h-8 border-b border-gray-200">
                             {cycles.map(cycle => {
                                 const cycleStart = parseLocalDate(cycle.startDate);
@@ -758,13 +735,11 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                                                     const taskStart = parseLocalDate(task.startDate);
                                                     const taskEnd = parseLocalDate(task.endDate);
                                                     if (!taskStart || !taskEnd || taskEnd < viewStartDate || taskStart > new Date(viewStartDate).setDate(viewStartDate.getDate() + days.length)) return null;
-
                                                     const startOffset = (taskStart.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24);
                                                     const duration = Math.max(1, (taskEnd.getTime() - taskStart.getTime()) / (1000 * 60 * 60 * 24) + 1);
                                                     const left = startOffset * dayWidth; const width = duration * dayWidth - 4;
                                                     const progress = calculateTaskProgress(task);
                                                     const daysRemaining = Math.ceil((taskEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
                                                     return (
                                                         <div key={task.id} id={`task-${task.id}`} className="h-10 absolute flex items-center rounded-lg cursor-pointer transition-all duration-200 group task-bar" style={{ top: `${taskIndex * 48 + 5}px`, left: `${left}px`, width: `${width}px` }} onClick={() => onTaskClick(task)} title={`${task.title} - ${task.status} (${Math.round(progress)}%)`}>
                                                             <div
@@ -821,7 +796,6 @@ const FilterList = ({ title, options, active, onFilterChange }) => (
         </select>
     </div>
 );
-
 const WorkspaceView = ({ tasks, cycles, onTaskClick, filters, setFilters, zoomLevel, setZoomLevel, viewStartDate, setViewStartDate, onOpenTaskModal, onOpenCyclesModal }) => {
     const workspaceViewRef = useRef(null);
     const allLabels = useMemo(() => {
@@ -837,25 +811,25 @@ const WorkspaceView = ({ tasks, cycles, onTaskClick, filters, setFilters, zoomLe
         <div className="space-y-6" ref={workspaceViewRef}>
             <Card>
                 <div className="space-y-4">
-                    {/* Cabeçalho Inline Compacto */}
-                    <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-                        <div>
-                            <h2 className="text-2xl font-bold text-gray-800 flex items-center">
-                                <Layers size={22} className="mr-3 text-indigo-600" />
-                                Roadmap
-                            </h2>
-                            <p className="text-sm text-gray-500 mt-1">Visualize suas iniciativas e projetos na linha do tempo.</p>
+                    {/* Cabeçalho Compacto */}
+                    <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                        <div className="flex items-center gap-3">
+                            <Layers size={22} className="text-indigo-600 flex-shrink-0" />
+                            <div>
+                                <h2 className="text-xl font-bold text-gray-800">Roadmap</h2>
+                                <p className="text-xs text-gray-500 hidden md:block">Visualize suas iniciativas e projetos na linha do tempo.</p>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-2 no-export">
-                             <Button onClick={() => exportViewAsImage(workspaceViewRef, 'roadmap.png')} variant="secondary">
-                                <Presentation size={16}/> Exportar Imagem
+                        <div className="flex items-center gap-2 no-export self-end sm:self-center">
+                            <Button onClick={() => exportViewAsImage(workspaceViewRef, 'roadmap.png')} variant="secondary">
+                                <Presentation size={16}/>
+                                <span className="hidden sm:inline">Exportar</span>
                             </Button>
-                             <Button onClick={() => onOpenTaskModal()} variant="primary">
+                            <Button onClick={() => onOpenTaskModal()} variant="primary">
                                 <Plus size={16}/> Nova Tarefa
                             </Button>
                         </div>
                     </div>
-                    
                     {/* Controles e Filtros */}
                     <div className="border-t pt-4 space-y-4">
                         <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
@@ -898,7 +872,6 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
         nextSteps
     } = useMemo(() => {
         const today = new Date();
-
         const roadmapMetrics = tasks.reduce((acc, task) => {
             const duration = getTaskDurationInDays(task);
             const progress = calculateTaskProgress(task);
@@ -909,14 +882,12 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
         const overallProgress = roadmapMetrics.totalDuration > 0
             ? Math.round(roadmapMetrics.totalWeightedProgress / roadmapMetrics.totalDuration)
             : 0;
-
         const projects = tasks.reduce((acc, task) => {
             const tag = task.projectTag || 'Sem Projeto';
             if (!acc[tag]) acc[tag] = { tasks: [] };
             acc[tag].tasks.push(task);
             return acc;
         }, {});
-
         const statusSummary = Object.keys(projects).map(tag => {
             const projectTasks = projects[tag].tasks;
             const statusCounts = projectTasks.reduce((counts, task) => {
@@ -936,10 +907,8 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
             const status = calculateOkrStatus(okr.startDate, okr.targetDate, progress);
             return { ...okr, progress, status };
         }).sort((a,b) => a.progress - b.progress);
-
         const totalOkrProgress = okrsDetails.reduce((sum, okr) => sum + okr.progress, 0);
         const avgOkrProgress = okrs.length > 0 ? Math.round(totalOkrProgress / okrs.length) : 0;
-
         const attention = [];
         const next = [];
         tasks.forEach(task => {
@@ -951,7 +920,6 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
                 next.push({ type: `Foco ${nextStepsPriority}`, text: task.title, date: task.startDate });
             }
         });
-
         okrs.forEach(okr => {
             (okr.keyResults || []).forEach(kr => {
                 (kr.attentionLog || []).forEach(log => {
@@ -988,7 +956,6 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
         });
         onSaveOkr({ ...targetOkr, keyResults: updatedKeyResults });
     };
-
     const getStatusColor = (progress) => {
         if (progress < 40) return 'bg-red-500';
         if (progress < 70) return 'bg-yellow-500';
@@ -1006,20 +973,20 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
     return (
         <div className="space-y-6" ref={executiveViewRef}>
             <Card>
-                <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-                    <div>
-                        <h2 className="text-2xl font-bold text-gray-800 flex items-center">
-                            <Briefcase size={22} className="mr-3 text-indigo-600" />
-                            Painel Executivo
-                        </h2>
-                        <p className="text-sm text-gray-500 mt-1">Visão consolidada do progresso, metas e riscos.</p>
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                    <div className="flex items-center gap-3">
+                        <Briefcase size={22} className="mr-1 text-indigo-600 flex-shrink-0" />
+                        <div>
+                            <h2 className="text-xl font-bold text-gray-800">Painel Executivo</h2>
+                            <p className="text-xs text-gray-500 hidden md:block">Visão consolidada do progresso, metas e riscos.</p>
+                        </div>
                     </div>
-                    <Button onClick={() => exportViewAsImage(executiveViewRef, 'painel_executivo.png')} variant="secondary" className="no-export">
-                        <Presentation size={16}/> Exportar Imagem
+                    <Button onClick={() => exportViewAsImage(executiveViewRef, 'painel_executivo.png')} variant="secondary" className="no-export self-end sm:self-center">
+                        <Presentation size={16}/>
+                        <span className="hidden sm:inline">Exportar</span>
                     </Button>
                 </div>
             </Card>
-
             <div className="space-y-2">
                 <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Painel de Indicadores-Chave</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1129,6 +1096,7 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
         </div>
     );
 };
+
 // --- Componentes de OKR ---
 const OkrForm = ({ okr, onSave, onCancel }) => {
     const [objective, setObjective] = useState(okr?.objective || '');
@@ -1137,7 +1105,6 @@ const OkrForm = ({ okr, onSave, onCancel }) => {
     const handleKrChange = (index, field, value) => {
         const newKrs = [...keyResults];
         const numericFields = ['startValue', 'targetValue', 'weight'];
-
         if (numericFields.includes(field)) {
             if (value === '') {
                 newKrs[index][field] = '';
@@ -1154,7 +1121,6 @@ const OkrForm = ({ okr, onSave, onCancel }) => {
     };
     const addKr = () => setKeyResults([...keyResults, { id: `kr_${Date.now()}`, text: '', startValue: 0, targetValue: 100, currentValue: 0, weight: 1, updates: [], attentionLog: [] }]);
     const removeKr = (index) => setKeyResults(keyResults.filter((_, i) => i !== index));
-
     const handleFormSave = () => {
         if (!objective.trim()) return;
         const finalKrs = keyResults
@@ -1296,10 +1262,8 @@ const KrItem = ({ kr, okrStartDate, okrTargetDate, onUpdate, onDeleteUpdate, onS
     const [newValue, setNewValue] = useState(kr.currentValue);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [isAttentionOpen, setIsAttentionOpen] = useState(false);
-
     const progress = calculateKrProgress(kr);
     const hasActiveAttention = (kr.attentionLog || []).some(log => !log.resolved);
-
     const pacingInfo = useMemo(() => calculatePacingInfo(
         okrStartDate,
         okrTargetDate,
@@ -1362,6 +1326,7 @@ const KrItem = ({ kr, okrStartDate, okrTargetDate, onUpdate, onDeleteUpdate, onS
         </>
     );
 };
+
 // --- Componente OkrView ---
 const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
     const okrViewRef = useRef(null);
@@ -1383,7 +1348,6 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
         setIsFormOpen(false);
         setEditingOkr(null);
     };
-
     const handleKrUpdate = (okr, krId, newValue) => {
         const updatedKeyResults = okr.keyResults.map(kr => {
             if (kr.id === krId) {
@@ -1404,7 +1368,6 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
         });
         onSave({ ...okr, keyResults: updatedKeyResults });
     };
-
     const handleDeleteUpdate = (okr, krId, updateId) => {
         const updatedKeyResults = okr.keyResults.map(kr => {
             if (kr.id === krId) {
@@ -1432,7 +1395,6 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
         setItemToDelete({ id, type: 'okr' });
         setIsConfirmDeleteOpen(true);
     }
-
     const confirmDeleteOkr = () => {
         onDelete(itemToDelete.id, itemToDelete.type);
         setIsConfirmDeleteOpen(false);
@@ -1445,33 +1407,32 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
             </ConfirmModal>
             <div className="space-y-6">
                 <Card>
-                    <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-                        <div>
-                            <h2 className="text-2xl font-bold text-gray-800 flex items-center">
-                                <Target size={22} className="mr-3 text-indigo-600" />
-                                Objetivos e Resultados-Chave
-                            </h2>
-                            <p className="text-sm text-gray-500 mt-1">Defina e acompanhe as metas que impulsionam seu roadmap.</p>
+                    <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                        <div className="flex items-center gap-3">
+                            <Target size={22} className="mr-1 text-indigo-600 flex-shrink-0" />
+                            <div>
+                                <h2 className="text-xl font-bold text-gray-800">Objetivos e Resultados-Chave</h2>
+                                <p className="text-xs text-gray-500 hidden md:block">Defina e acompanhe as metas que impulsionam seu roadmap.</p>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-2 no-export">
+                        <div className="flex items-center gap-2 no-export self-end sm:self-center">
                             <Button onClick={() => exportViewAsImage(okrViewRef, 'okrs.png')} variant="secondary">
-                                <Presentation size={16}/> Exportar Imagem
+                                <Presentation size={16}/>
+                                <span className="hidden sm:inline">Exportar</span>
                             </Button>
-                             <div className="flex items-center bg-gray-100 rounded-lg p-1">
-                                <button onClick={() => setLayout('list')} className={`p-2 rounded-md transition-colors ${layout === 'list' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}><List size={20} /></button>
-                                <button onClick={() => setLayout('grid')} className={`p-2 rounded-md transition-colors ${layout === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}><LayoutGrid size={20} /></button>
+                            <div className="flex items-center bg-gray-100 rounded-lg p-1">
+                                <button onClick={() => setLayout('list')} className={`p-1.5 rounded-md transition-colors ${layout === 'list' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}><List size={18} /></button>
+                                <button onClick={() => setLayout('grid')} className={`p-1.5 rounded-md transition-colors ${layout === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}><LayoutGrid size={18} /></button>
                             </div>
                             {!isFormOpen && (
                                 <Button onClick={() => setIsFormOpen(true)} variant="primary">
-                                    <Plus size={16} /> Novo Objetivo
+                                    <Plus size={16} /> <span className="hidden sm:inline">Novo Objetivo</span>
                                 </Button>
                             )}
                         </div>
                     </div>
                 </Card>
-
                 {isFormOpen && <OkrForm key={editingOkr?.id || 'new'} okr={editingOkr} onSave={handleSave} onCancel={handleCancel} />}
-
                 <div className={layout === 'list' ? "space-y-6" : "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"}>
                     {okrs.map(okr => {
                         const progress = calculateOkrProgress(okr);
@@ -1504,7 +1465,6 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
                                             )}
                                         </div>
                                     </div>
-
                                     <div className="mt-3 flex items-center gap-4 cursor-pointer" onClick={() => layout === 'list' && toggleExpansion(okr.id)}>
                                         <div className="w-full bg-gray-200 rounded-full h-4">
                                             <div className="bg-gradient-to-r from-sky-500 to-indigo-600 h-4 rounded-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
@@ -1513,7 +1473,6 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
                                         {layout === 'list' && <ChevronDown size={20} className={`text-gray-500 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />}
                                     </div>
                                 </div>
-
                                 {layout === 'list' && (
                                     <div className={`transition-all duration-500 ease-in-out bg-gray-50/50 ${isExpanded ? 'max-h-[2500px] py-4' : 'max-h-0'}`}>
                                         <div className="px-6 space-y-3">
@@ -1527,7 +1486,6 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
                                                 />
                                             ))}
                                         </div>
-
                                         {relatedTasks.length > 0 && (
                                             <div className="px-6 mt-4 pt-4 border-t border-gray-200">
                                                 <div onClick={() => toggleTasksExpansion(okr.id)} className="flex justify-between items-center cursor-pointer select-none">
@@ -1581,6 +1539,7 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
         </div>
     );
 };
+
 // --- Componente de Login ---
 const LoginScreen = () => {
     const [isLoginView, setIsLoginView] = useState(true);
@@ -1633,7 +1592,6 @@ const LoginScreen = () => {
                     Norte Estratégico
                 </h1>
                 <p className="text-center text-gray-600 mb-6">Seu planejamento estratégico em um só lugar.</p>
-
                 <div className="flex border-b mb-6">
                     <button onClick={() => setIsLoginView(true)} className={`flex-1 py-2 font-semibold ${isLoginView ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500'}`}>Entrar</button>
                     <button onClick={() => setIsLoginView(false)} className={`flex-1 py-2 font-semibold ${!isLoginView ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500'}`}>Registrar-se</button>
@@ -1644,7 +1602,6 @@ const LoginScreen = () => {
                     )}
                     <input type="email" placeholder="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full p-3 border rounded-lg" />
                     <input type="password" placeholder="Senha" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full p-3 border rounded-lg" />
-
                     <Button type="submit" variant="primary" className="w-full !py-3 !text-lg">
                         {isLoginView ? 'Entrar' : 'Criar Conta'}
                     </Button>
@@ -1665,6 +1622,7 @@ const LoginScreen = () => {
         </div>
     );
 };
+
 // --- Componente para um único card de tarefa no quadro Kanban ---
 const TaskCard = ({ task, onTaskClick }) => {
     const subtaskProgress = useMemo(() => {
@@ -1704,6 +1662,7 @@ const TaskCard = ({ task, onTaskClick }) => {
         </div>
     );
 };
+
 // --- ABA DE ATIVIDADES (KANBAN) ---
 const TasksView = ({ tasks, onTaskClick, filters, setFilters, onOpenTaskModal }) => {
     const tasksViewRef = useRef(null);
@@ -1731,17 +1690,18 @@ const TasksView = ({ tasks, onTaskClick, filters, setFilters, onOpenTaskModal })
     return (
         <div className="space-y-6" ref={tasksViewRef}>
             <Card>
-                <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-                    <div>
-                        <h2 className="text-2xl font-bold text-gray-800 flex items-center">
-                            <ListTodo size={22} className="mr-3 text-indigo-600" />
-                            Quadro de Atividades
-                        </h2>
-                        <p className="text-sm text-gray-500 mt-1">Visualize e gerencie o fluxo de trabalho do dia a dia.</p>
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                    <div className="flex items-center gap-3">
+                        <ListTodo size={22} className="mr-1 text-indigo-600 flex-shrink-0" />
+                        <div>
+                            <h2 className="text-xl font-bold text-gray-800">Quadro de Atividades</h2>
+                            <p className="text-xs text-gray-500 hidden md:block">Visualize e gerencie o fluxo de trabalho do dia a dia.</p>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2 no-export">
+                    <div className="flex items-center gap-2 no-export self-end sm:self-center">
                         <Button onClick={() => exportViewAsImage(tasksViewRef, 'quadro_atividades.png')} variant="secondary">
-                            <Presentation size={16}/> Exportar Imagem
+                            <Presentation size={16}/>
+                            <span className="hidden sm:inline">Exportar</span>
                         </Button>
                         <Button onClick={() => onOpenTaskModal()} variant="primary"><Plus size={16} /> Nova Tarefa</Button>
                     </div>
@@ -1754,7 +1714,6 @@ const TasksView = ({ tasks, onTaskClick, filters, setFilters, onOpenTaskModal })
                     )}
                 </div>
             </Card>
-
             <div className="flex gap-6 overflow-x-auto pb-4">
                 {Object.keys(STATUSES).map(status => (
                     <div key={status} className="flex-shrink-0 w-80 bg-gray-100 rounded-xl">
@@ -1777,6 +1736,7 @@ const TasksView = ({ tasks, onTaskClick, filters, setFilters, onOpenTaskModal })
         </div>
     );
 };
+
 // --- Componente Principal ---
 export default function App() {
     const [user, setUser] = useState(null);
@@ -1808,6 +1768,7 @@ export default function App() {
         });
         return () => unsubscribe();
     }, []);
+
     useEffect(() => {
         if (!user) {
             setTasks([]);
@@ -1819,9 +1780,11 @@ export default function App() {
         const tasksCollectionPath = `artifacts/${appId}/users/${userId}/roadmap_tasks`;
         const okrsCollectionPath = `artifacts/${appId}/users/${userId}/okrs`;
         const cyclesCollectionPath = `artifacts/${appId}/users/${userId}/cycles`;
+
         const unsubscribeTasks = onSnapshot(query(collection(db, tasksCollectionPath)), (snapshot) => {
             setTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         }, (err) => { console.error("Error fetching tasks:", err); setError("Falha ao carregar tarefas."); });
+
         const unsubscribeOkrs = onSnapshot(query(collection(db, okrsCollectionPath)), (snapshot) => {
             const okrData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             okrData.forEach(okr => {
@@ -1833,11 +1796,14 @@ export default function App() {
             });
             setOkrs(okrData);
         }, (err) => { console.error("Error fetching OKRs:", err); setError("Falha ao carregar OKRs."); });
+
         const unsubscribeCycles = onSnapshot(query(collection(db, cyclesCollectionPath)), (snapshot) => {
             setCycles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         }, (err) => { console.error("Error fetching cycles:", err); setError("Falha ao carregar ciclos."); });
+
         return () => { unsubscribeTasks(); unsubscribeOkrs(); unsubscribeCycles(); };
     }, [user, appId]);
+
     const handleSaveTask = async (taskData) => {
         if (!user) return;
         const collectionPath = `artifacts/${appId}/users/${user.uid}/roadmap_tasks`;
@@ -1878,7 +1844,6 @@ export default function App() {
     const handleSaveCycles = async (cyclesToSave) => {
         if (!user) return;
         const collectionPath = `artifacts/${appId}/users/${user.uid}/cycles`;
-
         for (const cycle of cyclesToSave) {
             const { localId, ...data } = cycle;
             if (cycle.id) {
@@ -1923,21 +1888,25 @@ export default function App() {
             return statusMatch && priorityMatch && labelMatch;
         }).sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
     }, [tasks, filters]);
+
     if (isLoading) {
         return <div className="flex justify-center items-center min-h-screen bg-gray-50"><p className="text-lg text-gray-600">Carregando...</p></div>
     }
     if (!user) {
         return <LoginScreen />;
     }
-    
+
     const NavButton = ({ currentView, viewName, setView, children, icon: Icon }) => (
-        <button 
-            onClick={() => setView(viewName)} 
-            className={`relative flex items-center gap-2 px-3 py-2 rounded-md font-semibold transition-colors duration-200 ${currentView === viewName ? 'text-indigo-600' : 'text-gray-500 hover:text-gray-900'}`}
+        <button
+            onClick={() => setView(viewName)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-md font-semibold transition-colors duration-200 text-sm ${
+                currentView === viewName
+                    ? 'bg-indigo-50 text-indigo-600'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+            }`}
         >
             <Icon size={16} />
             <span>{children}</span>
-            {currentView === viewName && <div className="absolute bottom-[-1px] left-0 right-0 h-0.5 bg-indigo-600"></div>}
         </button>
     );
 
@@ -1945,23 +1914,37 @@ export default function App() {
         <div className="bg-gray-50 text-gray-800 min-h-screen p-4 md:p-6 font-sans">
             <div className="max-w-8xl mx-auto">
                 <header className="mb-6 no-export">
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                        <div>
-                            <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-cyan-600">Norte Estratégico</h1>
-                            <p className="text-gray-500 mt-1">Planeje, execute e apresente com clareza e foco.</p>
-                        </div>
+                    {/* Nova barra de cabeçalho unificada */}
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
                         <div className="flex items-center gap-4">
+                            {/* Título da aplicação reduzido */}
+                            <h1 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-cyan-600">
+                                Norte Estratégico
+                            </h1>
+                            {/* Navegação integrada */}
+                            <div className="hidden md:flex items-center space-x-1 border-l pl-4">
+                                <NavButton currentView={view} viewName="tasks" setView={setView} icon={ListTodo}>Atividades</NavButton>
+                                <NavButton currentView={view} viewName="workspace" setView={setView} icon={Layers}>Roadmap</NavButton>
+                                <NavButton currentView={view} viewName="okr" setView={setView} icon={Target}>OKRs</NavButton>
+                                <NavButton currentView={view} viewName="executive" setView={setView} icon={Briefcase}>Painel Executivo</NavButton>
+                            </div>
+                        </div>
+
+                        {/* Informações do usuário e logout */}
+                        <div className="flex items-center gap-3">
                             <div className="flex items-center gap-2 text-sm text-gray-700">
                                 <User size={16} />
                                 <span>{user.displayName || 'Usuário'}</span>
                             </div>
-                            <Button onClick={handleLogout} variant="ghost" className="!px-3 !py-2">
+                            <Button onClick={handleLogout} variant="ghost" className="!px-2 !py-1">
                                 <LogOut size={16} />
                             </Button>
                         </div>
                     </div>
-                    <div className="mt-6 border-b border-gray-200">
-                        <div className="flex items-center space-x-2 sm:space-x-4">
+
+                    {/* Navegação para telas menores (abaixo do cabeçalho) */}
+                    <div className="md:hidden mt-4 border-b border-gray-200">
+                        <div className="flex items-center space-x-2 sm:space-x-4 overflow-x-auto">
                             <NavButton currentView={view} viewName="tasks" setView={setView} icon={ListTodo}>Atividades</NavButton>
                             <NavButton currentView={view} viewName="workspace" setView={setView} icon={Layers}>Roadmap</NavButton>
                             <NavButton currentView={view} viewName="okr" setView={setView} icon={Target}>OKRs</NavButton>
@@ -1969,6 +1952,7 @@ export default function App() {
                         </div>
                     </div>
                 </header>
+
                 <main>
                     {view === 'tasks' && (
                         <TasksView
@@ -2004,6 +1988,7 @@ export default function App() {
                     )}
                     {view === 'executive' && <ExecutiveView tasks={tasks} okrs={okrs} onSaveOkr={handleSaveOkr} />}
                 </main>
+
                 <TaskModal
                     isOpen={isTaskModalOpen}
                     onClose={() => setIsTaskModalOpen(false)}
