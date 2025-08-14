@@ -2,6 +2,7 @@
   "name": "general-control",
   "version": "0.1.0",
   "private": true,
+  "homepage": "https://uilian-c.github.io/general-control",
   "dependencies": {
     "firebase": "^10.12.2",
     "lucide-react": "^0.395.0",
