@@ -65,7 +65,6 @@ const exportViewAsImage = async (elementRef, fileName, options = {}) => {
     }
 };
 
-
 // --- Constantes e Helpers ---
 const PRIORITIES = {
   'Alta': { label: 'Alta', color: 'bg-red-500', textColor: 'text-red-500', borderColor: 'border-red-500' },
@@ -345,7 +344,9 @@ const CyclesModal = ({ isOpen, onClose, cycles, onSave, onDelete }) => {
     );
 };
 
+// CORREÇÃO APLICADA AQUI: Hooks movidos para dentro do componente
 const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest }) => {
+    
     const getInitialFormState = () => {
         const today = new Date().toISOString().split('T')[0];
         if (task) {
@@ -371,7 +372,7 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
         };
     };
 
-    const [formState, setFormState] = useState(getInitialFormState());
+    const [formState, setFormState] = useState(getInitialFormState);
     const [newProject, setNewProject] = useState('');
     const [isCreatingProject, setIsCreatingProject] = useState(false);
     const [expandedBlocker, setExpandedBlocker] = useState(null);
@@ -625,7 +626,6 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
         </Modal>
     );
 };
-
 
 // --- COMPONENTE TIMELINE ---
 const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
