@@ -25,8 +25,7 @@ if (!getApps().length) {
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// --- FUNÇÃO DE EXPORTAÇÃO FINAL, USANDO A BIBLIOTECA LOCAL ---
-// CORREÇÃO 1: Função de exportação de imagem corrigida para alta qualidade
+// --- FUNÇÃO DE EXPORTAÇÃO DE IMAGEM OTIMIZADA ---
 const exportViewAsImage = async (elementRef, fileName, options = {}) => {
     const { backgroundColor = '#f9fafb' } = options;
     const element = elementRef.current;
@@ -39,9 +38,7 @@ const exportViewAsImage = async (elementRef, fileName, options = {}) => {
         return !(node.classList && node.classList.contains('no-export'));
     };
 
-    // Aumenta a escala para melhor resolução
     const scale = 2;
-
     const exportOptions = {
         filter: filter,
         bgcolor: backgroundColor,
@@ -68,7 +65,6 @@ const exportViewAsImage = async (elementRef, fileName, options = {}) => {
         alert(`Ocorreu um erro inesperado durante a exportação: ${error.message}`);
     }
 };
-
 
 // --- Constantes e Helpers ---
 const PRIORITIES = {
@@ -204,7 +200,7 @@ const Card = ({ children, className = '', ...props }) => (
     </div>
 );
 const Button = ({ onClick, children, className = '', variant = 'primary', disabled = false }) => {
-    const baseClasses = 'px-4 py-2 rounded-lg font-semibold transition-all duration-300 flex items-center justify-center space-x-2 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+    const baseClasses = 'px-4 py-2 rounded-lg font-semibold transition-all duration-300 flex items-center justify-center space-x-2 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm';
     const variantClasses = {
         primary: 'bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500',
         secondary: 'bg-gray-200 text-gray-800 hover:bg-gray-300 focus:ring-gray-400',
@@ -322,7 +318,6 @@ const CyclesModal = ({ isOpen, onClose, cycles, onSave, onDelete }) => {
         </Modal>
     );
 };
-// CORREÇÃO APLICADA AQUI: Hooks movidos para dentro do componente
 const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest }) => {
 
     const getInitialFormState = () => {
@@ -630,7 +625,7 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
         if (days.length > 0) {
             let currentPrimaryGroup = null;
             let currentSecondaryGroup = null;
-            if (zoomLevel <= 3) {
+            if (zoomLevel <= 3) { // Trimestres / Meses
                 days.forEach(day => {
                     const year = day.getFullYear();
                     const quarter = Math.floor(day.getMonth() / 3) + 1;
@@ -648,7 +643,7 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                     currentSecondaryGroup.width += dayWidth;
                 });
             }
-            else if (zoomLevel <= 7) {
+            else if (zoomLevel <= 7) { // Meses / Dias
                 days.forEach(day => {
                     const monthKey = `${day.getFullYear()}-${day.getMonth()}`;
                     if (!currentPrimaryGroup || currentPrimaryGroup.key !== monthKey) {
@@ -659,7 +654,7 @@ const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
                     secondaryGroups.push({ key: day.toISOString(), label: day.getDate(), width: dayWidth, isToday: day.toDateString() === today.toDateString() });
                 });
             }
-            else {
+            else { // Semanas / Dias da Semana
                 days.forEach(day => {
                     const weekNumber = Math.ceil((((day - new Date(day.getFullYear(), 0, 1)) / 86400000) + new Date(day.getFullYear(), 0, 1).getDay() + 1) / 7);
                     const weekKey = `${day.getFullYear()}-W${weekNumber}`;
@@ -817,7 +812,7 @@ const FilterList = ({ title, options, active, onFilterChange }) => (
             id={`filter-${title}`}
             value={active}
             onChange={(e) => onFilterChange(e.target.value)}
-            className="p-2 border border-gray-300 rounded-md bg-white shadow-sm focus:ring-indigo-500 focus:border-indigo-500 min-w-[150px]"
+            className="p-2 border border-gray-300 rounded-md bg-white shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm"
         >
             <option value="Todos">Todos</option>
             {Object.keys(options).map(key => (
@@ -826,6 +821,7 @@ const FilterList = ({ title, options, active, onFilterChange }) => (
         </select>
     </div>
 );
+
 const WorkspaceView = ({ tasks, cycles, onTaskClick, filters, setFilters, zoomLevel, setZoomLevel, viewStartDate, setViewStartDate, onOpenTaskModal, onOpenCyclesModal }) => {
     const workspaceViewRef = useRef(null);
     const allLabels = useMemo(() => {
@@ -840,37 +836,54 @@ const WorkspaceView = ({ tasks, cycles, onTaskClick, filters, setFilters, zoomLe
     return (
         <div className="space-y-6" ref={workspaceViewRef}>
             <Card>
-                <div className="flex flex-col gap-4">
-                    <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                        <div className="flex items-center gap-2">
-                            <Button onClick={() => exportViewAsImage(workspaceViewRef, 'roadmap.png', { useScrollWidth: true })} variant="secondary" className="no-export">
-                                <Presentation size={16}/> Exportar Imagem
-                            </Button>
-                            <Button onClick={() => setViewStartDate(new Date(new Date().setDate(new Date().getDate() - 15)))} variant="secondary" className="no-export">Hoje</Button>
-                            <Button onClick={onOpenCyclesModal} variant="secondary" className="no-export"><Repeat size={16} className="mr-2"/> Gerenciar Ciclos</Button>
+                <div className="space-y-4">
+                    {/* Cabeçalho Inline Compacto */}
+                    <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-800 flex items-center">
+                                <Layers size={22} className="mr-3 text-indigo-600" />
+                                Roadmap
+                            </h2>
+                            <p className="text-sm text-gray-500 mt-1">Visualize suas iniciativas e projetos na linha do tempo.</p>
                         </div>
                         <div className="flex items-center gap-2 no-export">
-                            <button onClick={() => setZoomLevel(z => Math.max(1, z - 1))} className="p-2 rounded-full hover:bg-gray-200 transition-colors"><ZoomOut size={20} /></button>
-                            <input type="range" min="1" max="10" value={zoomLevel} onChange={e => setZoomLevel(Number(e.target.value))} className="w-24" />
-                            <button onClick={() => setZoomLevel(z => Math.min(10, z + 1))} className="p-2 rounded-full hover:bg-gray-200 transition-colors"><ZoomIn size={20} /></button>
+                             <Button onClick={() => exportViewAsImage(workspaceViewRef, 'roadmap.png')} variant="secondary">
+                                <Presentation size={16}/> Exportar Imagem
+                            </Button>
+                             <Button onClick={() => onOpenTaskModal()} variant="primary">
+                                <Plus size={16}/> Nova Tarefa
+                            </Button>
                         </div>
                     </div>
-                    <div className="flex flex-wrap justify-start items-center gap-4 border-t pt-4 mt-2">
-                        <FilterList title="Prioridade" options={PRIORITIES} active={filters.priority} onFilterChange={val => setFilters({...filters, priority: val})}/>
-                        <FilterList title="Status" options={STATUSES} active={filters.status} onFilterChange={val => setFilters({...filters, status: val})}/>
-                        {Object.keys(allLabels).length > 0 && (
-                            <FilterList title="Etiqueta" options={allLabels} active={filters.label} onFilterChange={val => setFilters({...filters, label: val})}/>
-                        )}
+                    
+                    {/* Controles e Filtros */}
+                    <div className="border-t pt-4 space-y-4">
+                        <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+                            <div className="flex items-center gap-2 no-export">
+                                <Button onClick={() => setViewStartDate(new Date(new Date().setDate(new Date().getDate() - 15)))} variant="secondary">Hoje</Button>
+                                <Button onClick={onOpenCyclesModal} variant="secondary"><Repeat size={16}/> Gerenciar Ciclos</Button>
+                            </div>
+                            <div className="flex items-center gap-2 no-export">
+                                <button onClick={() => setZoomLevel(z => Math.max(1, z - 1))} className="p-2 rounded-full hover:bg-gray-200 transition-colors"><ZoomOut size={20} /></button>
+                                <input type="range" min="1" max="10" value={zoomLevel} onChange={e => setZoomLevel(Number(e.target.value))} className="w-24" />
+                                <button onClick={() => setZoomLevel(z => Math.min(10, z + 1))} className="p-2 rounded-full hover:bg-gray-200 transition-colors"><ZoomIn size={20} /></button>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-4">
+                            <FilterList title="Prioridade" options={PRIORITIES} active={filters.priority} onFilterChange={val => setFilters({...filters, priority: val})}/>
+                            <FilterList title="Status" options={STATUSES} active={filters.status} onFilterChange={val => setFilters({...filters, status: val})}/>
+                            {Object.keys(allLabels).length > 0 && (
+                                <FilterList title="Etiqueta" options={allLabels} active={filters.label} onFilterChange={val => setFilters({...filters, label: val})}/>
+                            )}
+                        </div>
                     </div>
                 </div>
             </Card>
             <Timeline tasks={tasks} cycles={cycles} onTaskClick={onTaskClick} zoomLevel={zoomLevel} viewStartDate={viewStartDate} />
-            <div className="mt-6 flex justify-end gap-4 no-export">
-                <Button onClick={() => onOpenTaskModal()} variant="primary"><Plus size={20} className="mr-2" /> Nova Tarefa</Button>
-            </div>
         </div>
     );
 };
+
 // --- VISÃO EXECUTIVA ---
 const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
     const executiveViewRef = useRef(null);
@@ -992,12 +1005,14 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
     );
     return (
         <div className="space-y-6" ref={executiveViewRef}>
-            {/* CORREÇÃO 4 & 2: Cabeçalho da página redesenhado e padronizado */}
             <Card>
-                <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                     <div>
-                        <h2 className="text-2xl font-bold text-gray-800 flex items-center"><Briefcase className="mr-3 text-indigo-600" />Painel Executivo</h2>
-                        <p className="text-gray-500 mt-1 text-sm">Visão consolidada do progresso, metas e riscos.</p>
+                        <h2 className="text-2xl font-bold text-gray-800 flex items-center">
+                            <Briefcase size={22} className="mr-3 text-indigo-600" />
+                            Painel Executivo
+                        </h2>
+                        <p className="text-sm text-gray-500 mt-1">Visão consolidada do progresso, metas e riscos.</p>
                     </div>
                     <Button onClick={() => exportViewAsImage(executiveViewRef, 'painel_executivo.png')} variant="secondary" className="no-export">
                         <Presentation size={16}/> Exportar Imagem
@@ -1006,7 +1021,7 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
             </Card>
 
             <div className="space-y-2">
-                <h3 className="text-lg font-semibold text-gray-500 uppercase tracking-wider">Painel de Indicadores-Chave</h3>
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Painel de Indicadores-Chave</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <StatCard icon={<TrendingUpIcon size={24} className="text-green-800" />} label="Progresso Geral do Roadmap" value={`${overallRoadmapProgress}%`} colorClass="bg-green-200" />
                     <StatCard icon={<Target size={24} className="text-indigo-800" />} label="Progresso Geral dos OKRs" value={`${overallOkrProgress}%`} colorClass="bg-indigo-200" />
@@ -1015,7 +1030,7 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
                 </div>
             </div>
             <div className="space-y-2">
-                <h3 className="text-lg font-semibold text-gray-500 uppercase tracking-wider">Análise Detalhada</h3>
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Análise Detalhada</h3>
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                     <Card className="lg:col-span-1">
                         <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center"><Layers className="mr-2 text-gray-500" />Status por Projeto</h3>
@@ -1185,7 +1200,7 @@ const OkrForm = ({ okr, onSave, onCancel }) => {
                             </div>
                         ))}
                     </div>
-                    <Button onClick={addKr} variant="secondary" className="mt-3 text-sm"><Plus size={16} /> Adicionar KR</Button>
+                    <Button onClick={addKr} variant="secondary" className="mt-3"><Plus size={16} /> Adicionar KR</Button>
                 </div>
             </div>
             <div className="flex justify-end space-x-3 mt-6">
@@ -1429,18 +1444,20 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
                 <p>Tem certeza que deseja excluir este Objetivo e todos os seus KRs? Esta ação não pode ser desfeita.</p>
             </ConfirmModal>
             <div className="space-y-6">
-                {/* CORREÇÃO 4 & 2: Cabeçalho da página redesenhado e padronizado */}
                 <Card>
-                    <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                    <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                         <div>
-                            <h2 className="text-2xl font-bold text-gray-800 flex items-center"><Target className="mr-3 text-indigo-600" />Objetivos e Resultados-Chave</h2>
-                            <p className="text-gray-500 mt-1 text-sm">Defina e acompanhe as metas que impulsionam seu roadmap.</p>
+                            <h2 className="text-2xl font-bold text-gray-800 flex items-center">
+                                <Target size={22} className="mr-3 text-indigo-600" />
+                                Objetivos e Resultados-Chave
+                            </h2>
+                            <p className="text-sm text-gray-500 mt-1">Defina e acompanhe as metas que impulsionam seu roadmap.</p>
                         </div>
-                        <div className="flex items-center gap-4 no-export">
-                             <Button onClick={() => exportViewAsImage(okrViewRef, 'okrs.png')} variant="secondary">
+                        <div className="flex items-center gap-2 no-export">
+                            <Button onClick={() => exportViewAsImage(okrViewRef, 'okrs.png')} variant="secondary">
                                 <Presentation size={16}/> Exportar Imagem
                             </Button>
-                            <div className="flex items-center bg-gray-100 rounded-lg p-1">
+                             <div className="flex items-center bg-gray-100 rounded-lg p-1">
                                 <button onClick={() => setLayout('list')} className={`p-2 rounded-md transition-colors ${layout === 'list' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}><List size={20} /></button>
                                 <button onClick={() => setLayout('grid')} className={`p-2 rounded-md transition-colors ${layout === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}><LayoutGrid size={20} /></button>
                             </div>
@@ -1648,8 +1665,7 @@ const LoginScreen = () => {
         </div>
     );
 };
-// --- INÍCIO DOS NOVOS COMPONENTES ---
-// Componente para um único card de tarefa no quadro Kanban
+// --- Componente para um único card de tarefa no quadro Kanban ---
 const TaskCard = ({ task, onTaskClick }) => {
     const subtaskProgress = useMemo(() => {
         if (!task.subtasks || task.subtasks.length === 0) return null;
@@ -1688,7 +1704,7 @@ const TaskCard = ({ task, onTaskClick }) => {
         </div>
     );
 };
-// --- NOVA ABA DE ATIVIDADES (KANBAN) ---
+// --- ABA DE ATIVIDADES (KANBAN) ---
 const TasksView = ({ tasks, onTaskClick, filters, setFilters, onOpenTaskModal }) => {
     const tasksViewRef = useRef(null);
     const tasksByStatus = useMemo(() => {
@@ -1714,12 +1730,14 @@ const TasksView = ({ tasks, onTaskClick, filters, setFilters, onOpenTaskModal })
     }, [tasks]);
     return (
         <div className="space-y-6" ref={tasksViewRef}>
-            {/* CORREÇÃO 4 & 2: Cabeçalho da página redesenhado e padronizado */}
             <Card>
-                <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                     <div>
-                        <h2 className="text-2xl font-bold text-gray-800 flex items-center"><ListTodo className="mr-3 text-indigo-600" />Quadro de Atividades</h2>
-                        <p className="text-gray-500 mt-1 text-sm">Visualize e gerencie o fluxo de trabalho do dia a dia.</p>
+                        <h2 className="text-2xl font-bold text-gray-800 flex items-center">
+                            <ListTodo size={22} className="mr-3 text-indigo-600" />
+                            Quadro de Atividades
+                        </h2>
+                        <p className="text-sm text-gray-500 mt-1">Visualize e gerencie o fluxo de trabalho do dia a dia.</p>
                     </div>
                     <div className="flex items-center gap-2 no-export">
                         <Button onClick={() => exportViewAsImage(tasksViewRef, 'quadro_atividades.png')} variant="secondary">
@@ -1759,7 +1777,6 @@ const TasksView = ({ tasks, onTaskClick, filters, setFilters, onOpenTaskModal })
         </div>
     );
 };
-// --- FIM DOS NOVOS COMPONENTES ---
 // --- Componente Principal ---
 export default function App() {
     const [user, setUser] = useState(null);
@@ -1913,21 +1930,19 @@ export default function App() {
         return <LoginScreen />;
     }
     
-    // CORREÇÃO 3: Componente de abas redesenhado para ser mais moderno
     const NavButton = ({ currentView, viewName, setView, children, icon: Icon }) => (
         <button 
             onClick={() => setView(viewName)} 
-            className={`flex items-center gap-2 px-3 py-2 rounded-md font-semibold transition-colors duration-200 ${currentView === viewName ? 'text-indigo-600' : 'text-gray-500 hover:text-gray-900'}`}
+            className={`relative flex items-center gap-2 px-3 py-2 rounded-md font-semibold transition-colors duration-200 ${currentView === viewName ? 'text-indigo-600' : 'text-gray-500 hover:text-gray-900'}`}
         >
             <Icon size={16} />
             <span>{children}</span>
-            {currentView === viewName && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600"></div>}
+            {currentView === viewName && <div className="absolute bottom-[-1px] left-0 right-0 h-0.5 bg-indigo-600"></div>}
         </button>
     );
 
     return (
         <div className="bg-gray-50 text-gray-800 min-h-screen p-4 md:p-6 font-sans">
-            {/* CORREÇÃO 5: Conteúdo centralizado com largura máxima */}
             <div className="max-w-8xl mx-auto">
                 <header className="mb-6 no-export">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -1945,21 +1960,12 @@ export default function App() {
                             </Button>
                         </div>
                     </div>
-                    {/* CORREÇÃO 3: Abas redesenhadas */}
                     <div className="mt-6 border-b border-gray-200">
-                        <div className="flex items-center space-x-4">
-                             <div className="relative inline-flex items-center">
-                                <NavButton currentView={view} viewName="tasks" setView={setView} icon={ListTodo}>Atividades</NavButton>
-                            </div>
-                            <div className="relative inline-flex items-center">
-                                <NavButton currentView={view} viewName="workspace" setView={setView} icon={Layers}>Roadmap</NavButton>
-                            </div>
-                             <div className="relative inline-flex items-center">
-                                <NavButton currentView={view} viewName="okr" setView={setView} icon={Target}>OKRs</NavButton>
-                            </div>
-                            <div className="relative inline-flex items-center">
-                                <NavButton currentView={view} viewName="executive" setView={setView} icon={Briefcase}>Painel Executivo</NavButton>
-                            </div>
+                        <div className="flex items-center space-x-2 sm:space-x-4">
+                            <NavButton currentView={view} viewName="tasks" setView={setView} icon={ListTodo}>Atividades</NavButton>
+                            <NavButton currentView={view} viewName="workspace" setView={setView} icon={Layers}>Roadmap</NavButton>
+                            <NavButton currentView={view} viewName="okr" setView={setView} icon={Target}>OKRs</NavButton>
+                            <NavButton currentView={view} viewName="executive" setView={setView} icon={Briefcase}>Painel Executivo</NavButton>
                         </div>
                     </div>
                 </header>
