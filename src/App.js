@@ -18,49 +18,72 @@ const firebaseConfig = {
 // --- Inicialização Segura do Firebase ---
 let app;
 if (!getApps().length) {
-  app = initializeApp(firebaseConfig);
+    app = initializeApp(firebaseConfig);
 } else {
-  app = getApps()[0];
+    app = getApps()[0];
 }
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+// ALTERAÇÃO REALIZADA: Função de exportação de imagem otimizada.
 // --- FUNÇÃO DE EXPORTAÇÃO DE IMAGEM OTIMIZADA ---
 const exportViewAsImage = async (elementRef, fileName, options = {}) => {
-    const { backgroundColor = '#f9fafb' } = options;
-    const element = elementRef.current;
-    if (!element) {
-        alert("Erro: Não foi possível encontrar a área para exportar.");
-        return;
-    }
-    const filter = (node) => {
-        return !(node.classList && node.classList.contains('no-export'));
-    };
-    const scale = 2;
-    const exportOptions = {
-        filter: filter,
-        bgcolor: backgroundColor,
-        quality: 1.0,
-        width: element.offsetWidth * scale,
-        height: element.offsetHeight * scale,
-        style: {
-            transform: `scale(${scale})`,
-            transformOrigin: 'top left'
-        },
-        cacheBust: true,
-    };
-    try {
-        const dataUrl = await domtoimage.toPng(element, exportOptions);
-        const link = document.createElement("a");
-        link.href = dataUrl;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    } catch (error) {
-        console.error("Erro durante a exportação:", error);
-        alert(`Ocorreu um erro inesperado durante a exportação: ${error.message}`);
-    }
+  const { backgroundColor = '#FFFFFF' } = options; // Fundo branco por padrão
+  const originalElement = elementRef.current;
+
+  if (!originalElement) {
+    alert("Erro: Não foi possível encontrar a área para exportar.");
+    return;
+  }
+
+  // 1. Clonar o nó do DOM
+  const clonedElement = originalElement.cloneNode(true);
+
+  // 2. Preparar o clone para a exportação
+  // Adiciona estilos para garantir que o clone seja renderizado corretamente fora da tela
+  clonedElement.style.position = 'absolute';
+  clonedElement.style.top = '-9999px';
+  clonedElement.style.left = '0px';
+  clonedElement.style.width = `${originalElement.offsetWidth}px`; // Garante a mesma largura
+  
+  // Remove elementos marcados com 'no-export' do clone
+  clonedElement.querySelectorAll('.no-export').forEach(el => el.remove());
+
+  document.body.appendChild(clonedElement);
+
+  // Opções de exportação aprimoradas
+  const scale = 2; // Aumenta a resolução
+  const exportOptions = {
+    bgcolor: backgroundColor,
+    quality: 1.0,
+    width: clonedElement.offsetWidth * scale,
+    height: clonedElement.offsetHeight * scale,
+    style: {
+      // Aplica a escala via transform para o conteúdo interno, mas no clone
+      transform: `scale(${scale})`,
+      transformOrigin: 'top left',
+      // Garante que todo o conteúdo seja visível
+      overflow: 'visible',
+    },
+    cacheBust: true,
+  };
+
+  try {
+    // 3. Gerar a imagem a partir do CLONE
+    const dataUrl = await domtoimage.toPng(clonedElement, exportOptions);
+    const link = document.createElement("a");
+    link.href = dataUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch (error) {
+    console.error("Erro durante a exportação:", error);
+    alert(`Ocorreu um erro inesperado durante a exportação: ${error.message}`);
+  } finally {
+    // 4. Remover o clone do DOM
+    document.body.removeChild(clonedElement);
+  }
 };
 
 // --- Constantes e Helpers ---
@@ -109,7 +132,6 @@ const getDaysInView = (startDate, endDate) => {
     }
     return days;
 };
-
 // --- Lógica de Cálculo de Progresso e Ritmo ---
 const calculateKrProgress = (kr) => {
     const start = Number(kr.startValue) || 0;
@@ -187,7 +209,6 @@ const getTaskDurationInDays = (task) => {
     const duration = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
     return Math.max(1, duration + 1);
 };
-
 // --- Componentes da UI ---
 const Card = ({ children, className = '', ...props }) => (
     <div className={`bg-white border border-gray-200 rounded-xl p-4 sm:p-6 shadow-sm ${className}`} {...props}>
@@ -571,7 +592,6 @@ const TaskModal = ({ isOpen, onClose, task, tasks, okrs, onSave, onDeleteRequest
         </Modal>
     );
 };
-
 // --- COMPONENTE TIMELINE ---
 const Timeline = ({ tasks, cycles, onTaskClick, zoomLevel, viewStartDate }) => {
     const today = new Date();
@@ -857,7 +877,6 @@ const WorkspaceView = ({ tasks, cycles, onTaskClick, filters, setFilters, zoomLe
         </div>
     );
 };
-
 // --- VISÃO EXECUTIVA ---
 const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
     const executiveViewRef = useRef(null);
@@ -1096,7 +1115,6 @@ const ExecutiveView = ({ tasks, okrs, onSaveOkr }) => {
         </div>
     );
 };
-
 // --- Componentes de OKR ---
 const OkrForm = ({ okr, onSave, onCancel }) => {
     const [objective, setObjective] = useState(okr?.objective || '');
@@ -1326,7 +1344,6 @@ const KrItem = ({ kr, okrStartDate, okrTargetDate, onUpdate, onDeleteUpdate, onS
         </>
     );
 };
-
 // --- Componente OkrView ---
 const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
     const okrViewRef = useRef(null);
@@ -1539,7 +1556,6 @@ const OkrView = ({ okrs, tasks, onSave, onDelete }) => {
         </div>
     );
 };
-
 // --- Componente de Login ---
 const LoginScreen = () => {
     const [isLoginView, setIsLoginView] = useState(true);
@@ -1622,7 +1638,6 @@ const LoginScreen = () => {
         </div>
     );
 };
-
 // --- Componente para um único card de tarefa no quadro Kanban ---
 const TaskCard = ({ task, onTaskClick }) => {
     const subtaskProgress = useMemo(() => {
@@ -1662,7 +1677,6 @@ const TaskCard = ({ task, onTaskClick }) => {
         </div>
     );
 };
-
 // --- ABA DE ATIVIDADES (KANBAN) ---
 const TasksView = ({ tasks, onTaskClick, filters, setFilters, onOpenTaskModal }) => {
     const tasksViewRef = useRef(null);
@@ -1736,7 +1750,6 @@ const TasksView = ({ tasks, onTaskClick, filters, setFilters, onOpenTaskModal })
         </div>
     );
 };
-
 // --- Componente Principal ---
 export default function App() {
     const [user, setUser] = useState(null);
@@ -1760,7 +1773,6 @@ export default function App() {
         date.setHours(0,0,0,0);
         return date;
     });
-
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
             setUser(currentUser);
@@ -1768,7 +1780,6 @@ export default function App() {
         });
         return () => unsubscribe();
     }, []);
-
     useEffect(() => {
         if (!user) {
             setTasks([]);
@@ -1780,11 +1791,9 @@ export default function App() {
         const tasksCollectionPath = `artifacts/${appId}/users/${userId}/roadmap_tasks`;
         const okrsCollectionPath = `artifacts/${appId}/users/${userId}/okrs`;
         const cyclesCollectionPath = `artifacts/${appId}/users/${userId}/cycles`;
-
         const unsubscribeTasks = onSnapshot(query(collection(db, tasksCollectionPath)), (snapshot) => {
             setTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         }, (err) => { console.error("Error fetching tasks:", err); setError("Falha ao carregar tarefas."); });
-
         const unsubscribeOkrs = onSnapshot(query(collection(db, okrsCollectionPath)), (snapshot) => {
             const okrData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             okrData.forEach(okr => {
@@ -1796,14 +1805,11 @@ export default function App() {
             });
             setOkrs(okrData);
         }, (err) => { console.error("Error fetching OKRs:", err); setError("Falha ao carregar OKRs."); });
-
         const unsubscribeCycles = onSnapshot(query(collection(db, cyclesCollectionPath)), (snapshot) => {
             setCycles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         }, (err) => { console.error("Error fetching cycles:", err); setError("Falha ao carregar ciclos."); });
-
         return () => { unsubscribeTasks(); unsubscribeOkrs(); unsubscribeCycles(); };
     }, [user, appId]);
-
     const handleSaveTask = async (taskData) => {
         if (!user) return;
         const collectionPath = `artifacts/${appId}/users/${user.uid}/roadmap_tasks`;
@@ -1888,14 +1894,12 @@ export default function App() {
             return statusMatch && priorityMatch && labelMatch;
         }).sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
     }, [tasks, filters]);
-
     if (isLoading) {
         return <div className="flex justify-center items-center min-h-screen bg-gray-50"><p className="text-lg text-gray-600">Carregando...</p></div>
     }
     if (!user) {
         return <LoginScreen />;
     }
-
     const NavButton = ({ currentView, viewName, setView, children, icon: Icon }) => (
         <button
             onClick={() => setView(viewName)}
@@ -1909,10 +1913,10 @@ export default function App() {
             <span>{children}</span>
         </button>
     );
-
     return (
         <div className="bg-gray-50 text-gray-800 min-h-screen p-4 md:p-6 font-sans">
-            <div className="max-w-8xl mx-auto">
+            {/* ALTERAÇÃO REALIZADA: Ajuste da largura máxima da aplicação de 8xl para 7xl. */}
+            <div className="max-w-7xl mx-auto">
                 <header className="mb-6 no-export">
                     {/* Nova barra de cabeçalho unificada */}
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
@@ -1929,7 +1933,6 @@ export default function App() {
                                 <NavButton currentView={view} viewName="executive" setView={setView} icon={Briefcase}>Painel Executivo</NavButton>
                             </div>
                         </div>
-
                         {/* Informações do usuário e logout */}
                         <div className="flex items-center gap-3">
                             <div className="flex items-center gap-2 text-sm text-gray-700">
@@ -1941,7 +1944,6 @@ export default function App() {
                             </Button>
                         </div>
                     </div>
-
                     {/* Navegação para telas menores (abaixo do cabeçalho) */}
                     <div className="md:hidden mt-4 border-b border-gray-200">
                         <div className="flex items-center space-x-2 sm:space-x-4 overflow-x-auto">
@@ -1952,7 +1954,6 @@ export default function App() {
                         </div>
                     </div>
                 </header>
-
                 <main>
                     {view === 'tasks' && (
                         <TasksView
@@ -1988,7 +1989,6 @@ export default function App() {
                     )}
                     {view === 'executive' && <ExecutiveView tasks={tasks} okrs={okrs} onSaveOkr={handleSaveOkr} />}
                 </main>
-
                 <TaskModal
                     isOpen={isTaskModalOpen}
                     onClose={() => setIsTaskModalOpen(false)}
