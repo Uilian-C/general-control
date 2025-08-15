@@ -25,10 +25,10 @@ if (!getApps().length) {
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// ALTERAÇÃO REALIZADA: Função de exportação de imagem otimizada.
-// --- FUNÇÃO DE EXPORTAÇÃO DE IMAGEM OTIMIZADA ---
+// ALTERAÇÃO REALIZADA: Versão final da função de exportação, que lida com conteúdo de rolagem.
+// --- FUNÇÃO DE EXPORTAÇÃO DE IMAGEM SUPERIOR (PARA CONTEÚDO DE ROLAGEM) ---
 const exportViewAsImage = async (elementRef, fileName, options = {}) => {
-  const { backgroundColor = '#FFFFFF' } = options; // Fundo branco por padrão
+  const { backgroundColor = '#FFFFFF' } = options;
   const originalElement = elementRef.current;
 
   if (!originalElement) {
@@ -36,55 +36,75 @@ const exportViewAsImage = async (elementRef, fileName, options = {}) => {
     return;
   }
 
-  // 1. Clonar o nó do DOM
   const clonedElement = originalElement.cloneNode(true);
-
-  // 2. Preparar o clone para a exportação
-  // Adiciona estilos para garantir que o clone seja renderizado corretamente fora da tela
+  
+  // Estilos para renderizar o clone fora da tela
   clonedElement.style.position = 'absolute';
   clonedElement.style.top = '-9999px';
   clonedElement.style.left = '0px';
-  clonedElement.style.width = `${originalElement.offsetWidth}px`; // Garante a mesma largura
   
-  // Remove elementos marcados com 'no-export' do clone
+  // Remove elementos indesejados
   clonedElement.querySelectorAll('.no-export').forEach(el => el.remove());
 
   document.body.appendChild(clonedElement);
 
-  // Opções de exportação aprimoradas
-  const scale = 2; // Aumenta a resolução
-  const exportOptions = {
-    bgcolor: backgroundColor,
-    quality: 1.0,
-    width: clonedElement.offsetWidth * scale,
-    height: clonedElement.offsetHeight * scale,
-    style: {
-      // Aplica a escala via transform para o conteúdo interno, mas no clone
-      transform: `scale(${scale})`,
-      transformOrigin: 'top left',
-      // Garante que todo o conteúdo seja visível
-      overflow: 'visible',
-    },
-    cacheBust: true,
-  };
+  // --- LÓGICA INTELIGENTE PARA LIDAR COM A TIMELINE ---
+  // Encontra o contêiner de rolagem original e o seu clone correspondente
+  const originalTimelineContainer = originalElement.querySelector('.overflow-x-auto');
+  const clonedTimelineContainer = clonedElement.querySelector('.overflow-x-auto');
+
+  if (originalTimelineContainer && clonedTimelineContainer) {
+    // Usa a LARGURA TOTAL DE ROLAGEM (scrollWidth) para definir o tamanho
+    const fullWidth = originalTimelineContainer.scrollWidth;
+    clonedTimelineContainer.style.width = `${fullWidth}px`;
+    // Garante que o conteúdo não seja cortado e remove a barra de rolagem
+    clonedTimelineContainer.style.overflow = 'visible'; 
+    
+    // Ajusta também o contêiner pai no clone para acomodar a nova largura
+    const timelineContent = clonedTimelineContainer.children[0];
+    if (timelineContent) {
+        timelineContent.style.width = `${fullWidth}px`;
+    }
+  }
+
+  // Define a largura do elemento principal do clone para a largura total
+  clonedElement.style.width = `${originalElement.offsetWidth}px`;
+  if (originalTimelineContainer) {
+    // Se houver uma timeline, a largura do clone deve ser a maior entre a visível e a de rolagem
+     const finalWidth = Math.max(originalElement.offsetWidth, originalTimelineContainer.scrollWidth);
+     clonedElement.style.width = `${finalWidth}px`;
+  }
+ 
+  // Usa um fator de escala para alta resolução
+  const scale = 2;
 
   try {
-    // 3. Gerar a imagem a partir do CLONE
-    const dataUrl = await domtoimage.toPng(clonedElement, exportOptions);
+    const dataUrl = await domtoimage.toPng(clonedElement, {
+      width: clonedElement.scrollWidth * scale,
+      height: clonedElement.scrollHeight * scale,
+      style: {
+        transform: `scale(${scale})`,
+        transformOrigin: 'top left',
+        backgroundColor: backgroundColor
+      },
+      quality: 1.0,
+      cacheBust: true,
+    });
+    
     const link = document.createElement("a");
     link.href = dataUrl;
     link.download = fileName;
-    document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+
   } catch (error) {
     console.error("Erro durante a exportação:", error);
     alert(`Ocorreu um erro inesperado durante a exportação: ${error.message}`);
   } finally {
-    // 4. Remover o clone do DOM
+    // Limpa o clone do DOM
     document.body.removeChild(clonedElement);
   }
 };
+
 
 // --- Constantes e Helpers ---
 const PRIORITIES = {
@@ -863,7 +883,8 @@ const WorkspaceView = ({ tasks, cycles, onTaskClick, filters, setFilters, zoomLe
                                 <button onClick={() => setZoomLevel(z => Math.min(10, z + 1))} className="p-2 rounded-full hover:bg-gray-200 transition-colors"><ZoomIn size={20} /></button>
                             </div>
                         </div>
-                        <div className="flex flex-wrap items-center gap-4">
+                        {/* ALTERAÇÃO REALIZADA: Adicionada a classe 'no-export' para ocultar os filtros da imagem. */}
+                        <div className="flex flex-wrap items-center gap-4 no-export">
                             <FilterList title="Prioridade" options={PRIORITIES} active={filters.priority} onFilterChange={val => setFilters({...filters, priority: val})}/>
                             <FilterList title="Status" options={STATUSES} active={filters.status} onFilterChange={val => setFilters({...filters, status: val})}/>
                             {Object.keys(allLabels).length > 0 && (
@@ -1915,7 +1936,6 @@ export default function App() {
     );
     return (
         <div className="bg-gray-50 text-gray-800 min-h-screen p-4 md:p-6 font-sans">
-            {/* ALTERAÇÃO REALIZADA: Ajuste da largura máxima da aplicação de 8xl para 7xl. */}
             <div className="max-w-7xl mx-auto">
                 <header className="mb-6 no-export">
                     {/* Nova barra de cabeçalho unificada */}
